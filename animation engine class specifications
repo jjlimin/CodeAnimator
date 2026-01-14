@@ -1,0 +1,141 @@
+# Code Animator - Animation Engine Class Specifications
+# Phase 1: Single Variables & Control Flow
+# ========================================================
+
+# --------------------------------------------------------
+# GROUP 1: VARIABLE MANAGEMENT (MEMORY)
+# --------------------------------------------------------
+
+CLASS: VarCreate
+PURPOSE: Initialize a new variable in memory.
+INPUT_PARAMS:
+  - name (string): The variable name (e.g., "count")
+  - value (string/int): The initial value (e.g., 0)
+  - type (string): "int", "str", "bool", etc.
+ANIMATION:
+  1. A new container/box fades in at the next available memory slot.
+  2. The variable label ("name") appears above the box.
+  3. The "value" scales up and drops into the center of the box.
+
+CLASS: VarUpdate
+PURPOSE: General assignment update (e.g., x = 5, x = y).
+INPUT_PARAMS:
+  - name (string): The variable to update.
+  - new_value (string/int): The new value to display.
+ANIMATION:
+  1. The old value inside the box fades out or dissolves.
+  2. The "new_value" transforms/morphs into place inside the box.
+  3. Flash the box border yellow briefly to indicate change.
+
+CLASS: VarIncrease
+PURPOSE: Optimized animation for incrementing (e.g., i += 1, count++).
+INPUT_PARAMS:
+  - name (string): The variable name.
+  - delta (int): Amount added (usually 1).
+  - new_value (int): The final result.
+ANIMATION:
+  1. The current number moves slightly up.
+  2. It changes to the "new_value" with a quick "pop" effect.
+  3. It settles back down. (Must be faster/smoother than VarUpdate).
+
+CLASS: VarDecrease
+PURPOSE: Optimized animation for decrementing (e.g., i -= 1).
+INPUT_PARAMS:
+  - name (string): The variable name.
+  - delta (int): Amount subtracted.
+  - new_value (int): The final result.
+ANIMATION:
+  1. The current number moves slightly down.
+  2. It changes to the "new_value".
+  3. It settles back up.
+
+CLASS: VarDelete
+PURPOSE: Garbage collection or scope exit.
+INPUT_PARAMS:
+  - name (string): The variable to remove.
+ANIMATION:
+  1. The variable box turns gray.
+  2. The box and text fade out (opacity 0).
+  3. Remaining variables shift to fill the gap (optional for Phase 1).
+
+# --------------------------------------------------------
+# GROUP 2: LOGIC & COMPARISONS
+# --------------------------------------------------------
+
+CLASS: EqualityCheck
+PURPOSE: Visualizing '==' comparisons (e.g., if x == 5).
+INPUT_PARAMS:
+  - left_val (string/int): Left side operand.
+  - right_val (string/int): Right side operand.
+  - result (bool): True or False.
+ANIMATION:
+  1. A comparison bubble appears near the code line: "5 == 5?".
+  2. If result is True: Bubble turns GREEN with a Checkmark (✔).
+  3. If result is False: Bubble turns RED with an X symbol.
+  4. Bubble fades out after 1 second.
+
+CLASS: InequalityCheck
+PURPOSE: Visualizing '<', '>', '<=', '>=' (e.g., while i < 10).
+INPUT_PARAMS:
+  - left_val (string/int): Left side.
+  - operator (string): "<", ">", etc.
+  - right_val (string/int): Right side.
+  - result (bool): True or False.
+ANIMATION:
+  1. Highlight the variable being checked in Memory.
+  2. Show the comparison logic (e.g., "0 < 10").
+  3. Flash GREEN (True) or RED (False).
+
+# --------------------------------------------------------
+# GROUP 3: CONTROL FLOW (NAVIGATION)
+# --------------------------------------------------------
+
+CLASS: LineHighlight
+PURPOSE: Moving the execution cursor.
+INPUT_PARAMS:
+  - line_number (int): The line to highlight.
+ANIMATION:
+  1. The yellow highlight bar slides smoothly from the previous Y-position to the new "line_number" Y-position.
+
+CLASS: LoopJump
+PURPOSE: Visualizing the cycle of a loop (bottom back to top).
+INPUT_PARAMS:
+  - from_line (int): End of loop block.
+  - to_line (int): Start of loop block.
+ANIMATION:
+  1. The highlight bar moves quickly from "from_line" back up to "to_line".
+  2. Ideally, leave a faint "trail" or show a curved arrow indicating the jump back.
+
+# --------------------------------------------------------
+# GROUP 4: INPUT / OUTPUT & NARRATIVE
+# --------------------------------------------------------
+
+CLASS: ConsolePrint
+PURPOSE: Visualizing 'print()' statements.
+INPUT_PARAMS:
+  - source_var (string, optional): Variable name if printing a variable.
+  - text_content (string): The actual string to show in the console.
+ANIMATION:
+  1. If "source_var" exists, a copy of the text flies from the Variable Box in memory.
+  2. It lands in the "Terminal/Console" area at the bottom of the screen.
+  3. A new line is added to the console log.
+
+CLASS: UserInput
+PURPOSE: Visualizing 'input()' statements.
+INPUT_PARAMS:
+  - target_var (string): Variable receiving the input.
+ANIMATION:
+  1. Execution pauses.
+  2. A "Keyboard" icon or prompt appears.
+  3. Characters appear one by one (typing effect).
+  4. The final value flies into the "target_var" memory box.
+
+CLASS: MascotSpeak
+PURPOSE: Narration and emotional cues.
+INPUT_PARAMS:
+  - text (string): The subtitle text.
+  - mood (string): "happy", "confused", "thinking", "explaining".
+ANIMATION:
+  1. Update Mascot sprite/SVG to match "mood".
+  2. Show speech bubble with "text".
+  3. (Backend syncs this with the TTS audio file duration).
