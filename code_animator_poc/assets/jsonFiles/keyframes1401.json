@@ -1,45 +1,32 @@
 {
   "sequence": [
     {
+      "type": "NarrationOnly",
+      "code": "def main():",
+      "narration": "We initialize the Stack Frame.",
+      "mascot": "idle",
+      "params": { "scope": "main()" }
+    },
+    {
       "type": "VarCreate",
-      "code": "user_count = 50",
-      "narration": "We initialize the variable user_count to 50 inside the main scope.",
+      "code": "a = 100",
+      "narration": "We create variable 'a'... and give it the value 100.",
+      "mascot": "pointing",
       "params": {
-        "name": "user_count",
+        "name": "a",
+        "value": 100,
+        "type": "int",
+        "scope": "main()"
+      }
+    },
+    {
+      "type": "VarCreate",
+      "code": "b = 50",
+      "narration": "Then we create variable 'b'... setting it to 50.",
+      "mascot": "thinking",
+      "params": {
+        "name": "b",
         "value": 50,
-        "type": "int",
-        "scope": "main()"
-      }
-    },
-    {
-      "type": "VarCreate",
-      "code": "val = 50",
-      "narration": "We create a new variable val and set it to 50.",
-      "params": {
-        "name": "val",
-        "value": 50,
-        "type": "int",
-        "scope": "main()"
-      }
-    },
-    {
-      "type": "VarCreate",
-      "code": "temp = 10",
-      "narration": "Next, we define a temporary variable temp with value 10.",
-      "params": {
-        "name": "temp",
-        "value": 10,
-        "type": "int",
-        "scope": "main()"
-      }
-    },
-    {
-      "type": "VarCreate",
-      "code": "result = 60",
-      "narration": "Finally, we calculate the result and store 60.",
-      "params": {
-        "name": "result",
-        "value": 60,
         "type": "int",
         "scope": "main()"
       }
