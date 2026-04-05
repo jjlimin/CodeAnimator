@@ -7,7 +7,7 @@ from code_animator_poc.engine import render_code_animation
 
 # Configuration and Paths
 SOURCE_CODE_FILE = 'C:\\Users\\GuyFirst\\code-animator\\VidGenPOC\\ast_service\\code_snippets\\code_snippet2.py'  # The Python file you want to animate
-INPUT_JSON_FILE = 'code_animator_poc/assets/jsonFiles/keyframes1401.json' # Manual bridge for now
+INPUT_JSON_FILE = 'code_animator_poc/assets/jsonFiles/keyframes1401.json'  # Manual bridge for now
 OUTPUT_VIDEO_FILE = 'code_animator_poc.mp4'
 
 def request_keyframes_from_openai(ast_json):

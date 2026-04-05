@@ -1,7 +1,5 @@
-import io
-import sys
-from ast_service import run_code
-from ast_service import cli
+from poc.ast_service import run_code
+from poc.ast_service import cli
 
 
 def test_run_code_helper():
@@ -23,7 +21,7 @@ def test_cli_main_with_code_arg(capsys):
 def test_run_file_tmp_path(tmp_path):
     p = tmp_path / "snippet.py"
     p.write_text("x = 3\nprint(x)\n")
-    from ast_service import run_file
+    from poc.ast_service import run_file
     ast_obj = run_file(str(p))
     assert ast_obj["type"] == "Module"
     # ensure we can see an Assign and Call in the body

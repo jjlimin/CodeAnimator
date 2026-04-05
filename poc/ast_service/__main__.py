@@ -20,7 +20,7 @@ def _get_main_callable():
         parent = os.path.dirname(pkg_dir)
         if parent not in sys.path:
             sys.path.insert(0, parent)
-        from ast_service.cli import main
+        from poc.ast_service.cli import main
         return main
 
 

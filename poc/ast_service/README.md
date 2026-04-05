@@ -7,7 +7,8 @@ Usage examples:
 - As a module:
 
 ```py
-from ast_service import parse_code
+from poc.ast_service import parse_code
+
 ast_dict = parse_code("def foo():\n    return 1", "python")
 ```
 
@@ -24,7 +25,8 @@ python -m ast_service --code "x = 1\nprint(x)\n"
 Programmatic usage:
 
 ```py
-from ast_service import run_code, run_file
+from poc.ast_service import run_code, run_file
+
 # parse a snippet string directly
 ast = run_code("x = 1\nprint(x)\n", "python")
 # parse a file by passing its path as a variable (no CLI)

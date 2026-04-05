@@ -1,5 +1,4 @@
-import json
-from ast_service import parse_code
+from poc.ast_service import parse_code
 
 
 def test_parse_simple_function():
