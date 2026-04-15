@@ -1,0 +1,11 @@
+.git
+__pycache__
+*.pyc
+.pytest_cache
+*.log
+.env
+.DS_Store
+output/
+media/
+docs/
+tests/
