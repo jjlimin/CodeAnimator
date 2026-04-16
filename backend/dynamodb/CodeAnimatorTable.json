@@ -1,0 +1,30 @@
+{
+  "TableName": "CodeAnimatorTable",
+  "BillingMode": "PAY_PER_REQUEST",
+  "KeySchema": [
+    { "AttributeName": "UserID", "KeyType": "HASH" },
+    { "AttributeName": "ProjectID", "KeyType": "RANGE" }
+  ],
+  "AttributeDefinitions": [
+    { "AttributeName": "UserID", "AttributeType": "S" },
+    { "AttributeName": "ProjectID", "AttributeType": "S" }
+  ],
+  "Notes": {
+    "PrimaryKey": "UserID (partition) + ProjectID (sort)",
+    "ProjectIDPattern": "PROJ#{job_id}",
+    "KnownStatusValues": [
+      "Parsing",
+      "GeneratingContent",
+      "ScriptGenerated",
+      "SyntaxError",
+      "Error"
+    ],
+    "KnownAttributes": [
+      "UserID",
+      "ProjectID",
+      "Status",
+      "startTime",
+      "errorMessage"
+    ]
+  }
+}
