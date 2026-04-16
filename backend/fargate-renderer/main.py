@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 import subprocess
 import boto3
 from botocore.exceptions import NoCredentialsError
@@ -7,76 +8,49 @@ from manim import config
 
 # S3 Configuration
 S3_BUCKET = os.getenv("AWS_S3_BUCKET", "code-animator-assets")
-S3_PREFIX = os.getenv("AWS_S3_PREFIX", "projects/")
-
-# AWS Credentials from environment variables (secure!)
-AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID")
-AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-AWS_TOKEN = os.getenv("AWS_SESSION_TOKEN")
 
 
-def upload_to_s3(local_file_path, s3_file_name):
+def upload_to_s3(local_file_path, s3_key):
     """
-    Uploads a local file to the specified S3 bucket and prefix using
-    credentials from environment variables.
+    Uploads a local file to S3 using the Fargate task IAM role (no explicit credentials needed).
     """
-    # Validate credentials exist
-    if not all([AWS_ACCESS_KEY, AWS_SECRET_KEY, AWS_TOKEN]):
-        print("⚠️  Warning: AWS credentials not found in environment variables.")
-        print("   To upload to S3, set: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN")
-        print("   Skipping S3 upload...")
-        return
-    
-    # Initialize the S3 client with environment credentials
-    s3 = boto3.client(
-        's3',
-        aws_access_key_id=AWS_ACCESS_KEY,
-        aws_secret_access_key=AWS_SECRET_KEY,
-        aws_session_token=AWS_TOKEN
-    )
-
+    s3 = boto3.client('s3')
     try:
-        print(f"Uploading {local_file_path} to S3...")
-
-        # Upload the file
-        s3.upload_file(local_file_path, S3_BUCKET, S3_PREFIX + s3_file_name)
-
-        print(f"Successfully uploaded to: s3://{S3_BUCKET}/{S3_PREFIX}{s3_file_name}")
-
-        # Clean up: Remove the local file after a successful upload
+        print(f"Uploading {local_file_path} to s3://{S3_BUCKET}/{s3_key}")
+        s3.upload_file(local_file_path, S3_BUCKET, s3_key)
+        print(f"Successfully uploaded to: s3://{S3_BUCKET}/{s3_key}")
         os.remove(local_file_path)
         print(f"Local file {local_file_path} removed.")
-
     except FileNotFoundError:
         print(f"Error: The local file {local_file_path} was not found.")
+        raise
     except NoCredentialsError:
-        print("Error: AWS credentials invalid or expired.")
+        print("Error: No AWS credentials available.")
+        raise
     except Exception as e:
-        print(f"An unexpected error occurred during S3 upload: {e}")
+        print(f"S3 upload error: {e}")
+        raise
 
 
-def render_animation(storyboard_path: str, output_format: str = "mp4") -> None:
+def render_animation(storyboard_path: str, output_format: str = "mp4") -> str | None:
     """
-    Renders a Manim animation based on a JSON storyboard and uploads it to S3.
+    Renders a Manim animation from a JSON storyboard file.
+    Returns the local path of the rendered file, or None on failure.
     """
     if not os.path.exists(storyboard_path):
         raise FileNotFoundError(f"Storyboard file not found: {storyboard_path}")
 
-    # Manim Global Configuration
     config.pixel_height = 1080
     config.pixel_width = 1920
     config.frame_rate = 60
 
-    # Define output file names
     base_name = os.path.basename(storyboard_path).split('.')[0]
     file_ext = "mp4" if output_format == "mp4" else "gif"
     target_file_name = f"{base_name}.{file_ext}"
 
-    # Temporary directory for Manim rendering process
     temp_media_dir = "./temp_render_output"
     os.makedirs(temp_media_dir, exist_ok=True)
 
-    # Generate the temporary python scene file
     temp_scene_file = "./temp_scene.py"
     scene_code = f'''
 from animation_scene import AnimationScene
@@ -90,24 +64,19 @@ class CodeAnimatorScene(AnimationScene):
     try:
         print(f"Starting Manim render for: {target_file_name}")
 
-        # Build the Manim CLI command
         cmd = [
             "manim",
             "-o", target_file_name,
             "-v", "WARNING",
             "--media_dir", temp_media_dir,
-            # "--video_dir", temp_media_dir,
             temp_scene_file,
             "CodeAnimatorScene"
         ]
-
         if output_format == "gif":
             cmd.append("-i")
 
-        # Execute Manim
         subprocess.run(cmd, check=True)
 
-        # Search for the rendered file in the temp directory
         rendered_local_path = None
         for root, dirs, files in os.walk(temp_media_dir):
             if target_file_name in files:
@@ -115,20 +84,71 @@ class CodeAnimatorScene(AnimationScene):
                 break
 
         if rendered_local_path:
-            # Upload the result to AWS S3
-            upload_to_s3(rendered_local_path, target_file_name)
+            print(f"Render complete: {rendered_local_path}")
+            return rendered_local_path
         else:
             print("Error: Render finished but the output file could not be located.")
+            return None
 
     except subprocess.CalledProcessError as e:
-        print(f"Manim Rendering Failed: {e}")
+        print(f"Manim rendering failed: {e}")
+        return None
     finally:
-        # Cleanup the temporary scene script
         if os.path.exists(temp_scene_file):
             os.remove(temp_scene_file)
 
 
-def main():
+def fargate_main():
+    """
+    Entry point when running in AWS Fargate.
+    Reads SCRIPT_DATA env var (injected by Step Functions), downloads the storyboard
+    from S3, renders it, and uploads the video back to S3.
+    """
+    script_data_raw = os.getenv("SCRIPT_DATA")
+    if not script_data_raw:
+        print("Error: SCRIPT_DATA environment variable is not set.")
+        sys.exit(1)
+
+    try:
+        script_data = json.loads(script_data_raw)
+    except json.JSONDecodeError as e:
+        print(f"Error: Failed to parse SCRIPT_DATA as JSON: {e}")
+        sys.exit(1)
+
+    script_s3_key = script_data.get("script_s3_key")
+    job_id = script_data.get("ProjectID")
+
+    if not script_s3_key or not job_id:
+        print(f"Error: Missing 'script_s3_key' or 'ProjectID' in SCRIPT_DATA: {script_data}")
+        sys.exit(1)
+
+    print(f"Job ID: {job_id}")
+    print(f"Downloading storyboard from s3://{S3_BUCKET}/{script_s3_key}")
+
+    s3 = boto3.client('s3')
+    response = s3.get_object(Bucket=S3_BUCKET, Key=script_s3_key)
+    s3_content = json.loads(response['Body'].read().decode('utf-8'))
+
+    # The ScriptGenerator wraps the storyboard in {job_id, user_id, script, generated_at}
+    storyboard = s3_content.get("script", s3_content)
+
+    tmp_storyboard_path = f"/tmp/{job_id}_storyboard.json"
+    with open(tmp_storyboard_path, 'w') as f:
+        json.dump(storyboard, f)
+    print(f"Storyboard saved to {tmp_storyboard_path}")
+
+    rendered_path = render_animation(tmp_storyboard_path, output_format="mp4")
+
+    if rendered_path:
+        s3_output_key = f"projects/{job_id}/animation.mp4"
+        upload_to_s3(rendered_path, s3_output_key)
+    else:
+        print("Rendering failed — no file to upload.")
+        sys.exit(1)
+
+
+def local_main():
+    """Entry point for local CLI use: python main.py <storyboard.json> [mp4|gif]"""
     if len(sys.argv) < 2:
         print("Usage: python main.py <path_to_storyboard.json> [mp4|gif]")
         sys.exit(1)
@@ -136,8 +156,15 @@ def main():
     path = sys.argv[1]
     fmt = sys.argv[2] if len(sys.argv) > 2 else "mp4"
 
-    render_animation(path, fmt)
+    rendered_path = render_animation(path, fmt)
+    if rendered_path:
+        s3_prefix = os.getenv("AWS_S3_PREFIX", "projects/")
+        base_name = os.path.basename(rendered_path)
+        upload_to_s3(rendered_path, s3_prefix + base_name)
 
 
 if __name__ == "__main__":
-    main()
+    if os.getenv("SCRIPT_DATA"):
+        fargate_main()
+    else:
+        local_main()
