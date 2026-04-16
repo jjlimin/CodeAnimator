@@ -14,6 +14,9 @@ from manim import (
     Mobject, VMobject, RoundedRectangle, Circle, Line
 )
 
+# PURE_GREEN is not exported by this version of Manim — define it here
+PURE_GREEN = GREEN
+
 
 class ValueBox(VGroup):
     """
@@ -403,7 +406,5 @@ class ConditionDisplay(VGroup):
         self.result = result
 
 
-# Define green and red constants for compatibility
-PURE_GREEN = GREEN
-PURE_RED = RED
+# PURE_RED is imported from manim; PURE_GREEN is defined at the top of this file
 
