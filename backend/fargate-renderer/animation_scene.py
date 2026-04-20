@@ -8,7 +8,8 @@ This is the core Manim Scene class that brings everything together:
 - Executes commands sequentially with proper timing
 """
 
-from typing import Dict, Any, List
+import json
+from typing import Dict, Any, List, Optional
 from manim import (
     Scene, Text, FadeIn, FadeOut, Transform, Wait, ApplyMethod,
     WHITE, BLACK, GREEN, RED, BLUE, YELLOW,
@@ -27,30 +28,44 @@ class AnimationScene(Scene):
     Main Manim Scene that orchestrates all animations.
     """
 
-    def __init__(self, storyboard_path: str, *args, **kwargs):
+    def __init__(self, storyboard_path: str, audio_map_path: Optional[str] = None, *args, **kwargs):
         """
         Initialize the AnimationScene.
 
         Args:
             storyboard_path: Path to the storyboard JSON file.
+            audio_map_path: Optional path to audio map JSON produced by tts_generator.
+                            Keys are step_id strings; values are {path, duration} dicts.
         """
         super().__init__(*args, **kwargs)
         self.camera.background_color = BLACK
-        
+
         # Load and validate storyboard
         self.dispatcher = Dispatcher.load_from_file(storyboard_path)
-        
+
+        # Load voiceover audio map (step_id -> {path, duration})
+        self._audio_map: Dict[str, Dict] = {}
+        if audio_map_path:
+            try:
+                with open(audio_map_path) as f:
+                    raw = json.load(f)
+                # Normalise keys to strings to match step_id lookups
+                self._audio_map = {str(k): v for k, v in raw.items()}
+                print(f"Loaded voiceover audio map: {len(self._audio_map)} entries")
+            except Exception as e:
+                print(f"Warning: could not load audio map from {audio_map_path}: {e}")
+
         # Initialize registry and console
         self.registry = ObjectRegistry()
         self.console = ConsoleOutput()
         self.add(self.console)
-        
+
         # Position tracking for auto-arrange
         self.next_position = ORIGIN
         self.objects_per_row = 3
         self.row_height = 2.5
         self.col_width = 2.5
-        
+
         # Keep track of current caption for cleanup
         self.current_caption = None
 
@@ -85,10 +100,19 @@ class AnimationScene(Scene):
             self.remove(self.current_caption)
             self.current_caption = None
 
+        # Schedule voiceover audio before any animations so it plays concurrently
+        audio_entry = self._audio_map.get(str(step_id))
+        if audio_entry:
+            self.add_sound(audio_entry["path"])
+            audio_duration: Optional[float] = audio_entry["duration"]
+            print(f"  Voiceover queued: {audio_entry['path']} ({audio_duration:.2f}s)")
+        else:
+            audio_duration = None
+
         # Display narration as caption
         self.current_caption = self.display_narration_caption(narration)
 
-        # Execute all visual commands sequentially
+        # Execute all visual commands sequentially (animations run while audio plays)
         for command in visual_commands:
             try:
                 self.execute_command(command)
@@ -96,10 +120,13 @@ class AnimationScene(Scene):
                 print(f"Error executing command: {e}")
                 raise
 
-        # Wait based on narration length
-        duration = self.dispatcher.calculate_step_duration(narration)
-        self.wait(duration)
-        
+        # Hold until voiceover finishes; fall back to narration-length estimate
+        if audio_duration is not None:
+            self.wait(audio_duration)
+        else:
+            duration = self.dispatcher.calculate_step_duration(narration)
+            self.wait(duration)
+
         # Fade out the caption
         if self.current_caption:
             self.play(FadeOut(self.current_caption))

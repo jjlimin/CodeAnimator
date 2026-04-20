@@ -1,6 +1,7 @@
 import sys
 import os
 import json
+import shutil
 import subprocess
 import boto3
 from botocore.exceptions import NoCredentialsError
@@ -32,6 +33,49 @@ def upload_to_s3(local_file_path, s3_key):
         raise
 
 
+def _generate_voiceovers(storyboard_path: str, audio_dir: str) -> str:
+    """
+    Pre-generate TTS audio for every step in the storyboard.
+
+    Returns the path to the written audio_map JSON file, or an empty string
+    if TTS is unavailable (missing API key or import error).
+    """
+    from tts_generator import generate_step_audio, get_audio_duration
+
+    if not os.getenv("OPENAI_API_KEY"):
+        print("OPENAI_API_KEY not set — skipping voiceover generation.")
+        return ""
+
+    with open(storyboard_path) as f:
+        storyboard = json.load(f)
+
+    steps = storyboard.get("script", [])
+    audio_map = {}
+
+    for step in steps:
+        step_id = step.get("step_id")
+        narration = step.get("narration", "").strip()
+        if not narration:
+            continue
+        try:
+            audio_path = generate_step_audio(step_id, narration, audio_dir)
+            duration = get_audio_duration(audio_path)
+            audio_map[step_id] = {"path": audio_path, "duration": duration}
+            print(f"  Voiceover step {step_id}: {duration:.2f}s -> {audio_path}")
+        except Exception as e:
+            print(f"  Warning: TTS failed for step {step_id}: {e}")
+
+    if not audio_map:
+        return ""
+
+    audio_map_path = os.path.join(audio_dir, "audio_map.json")
+    with open(audio_map_path, "w") as f:
+        json.dump(audio_map, f)
+
+    print(f"Audio map written to: {audio_map_path}")
+    return audio_map_path
+
+
 def render_animation(storyboard_path: str, output_format: str = "mp4") -> str | None:
     """
     Renders a Manim animation from a JSON storyboard file.
@@ -49,16 +93,30 @@ def render_animation(storyboard_path: str, output_format: str = "mp4") -> str | 
     target_file_name = f"{base_name}.{file_ext}"
 
     temp_media_dir = "./temp_render_output"
+    audio_dir = "./temp_audio"
     os.makedirs(temp_media_dir, exist_ok=True)
+    os.makedirs(audio_dir, exist_ok=True)
+
+    # Pre-generate voiceovers before Manim starts (audio files must exist at render time)
+    print("Generating voiceovers...")
+    audio_map_path = _generate_voiceovers(storyboard_path, audio_dir)
+
+    # Escape backslashes for use inside the Python string literal in temp_scene.py
+    safe_storyboard_path = storyboard_path.replace("\\", "\\\\")
+    safe_audio_map_path = audio_map_path.replace("\\", "\\\\")
 
     temp_scene_file = "./temp_scene.py"
+    audio_map_arg = f'"{safe_audio_map_path}"' if audio_map_path else "None"
     scene_code = f'''
 from animation_scene import AnimationScene
 class CodeAnimatorScene(AnimationScene):
     def __init__(self):
-        super().__init__(storyboard_path="{storyboard_path}")
+        super().__init__(
+            storyboard_path="{safe_storyboard_path}",
+            audio_map_path={audio_map_arg},
+        )
 '''
-    with open(temp_scene_file, 'w') as f:
+    with open(temp_scene_file, "w") as f:
         f.write(scene_code)
 
     try:
@@ -96,6 +154,10 @@ class CodeAnimatorScene(AnimationScene):
     finally:
         if os.path.exists(temp_scene_file):
             os.remove(temp_scene_file)
+        # Clean up temporary audio files after rendering
+        if os.path.exists(audio_dir):
+            shutil.rmtree(audio_dir, ignore_errors=True)
+            print("Temporary audio files cleaned up.")
 
 
 def fargate_main():
