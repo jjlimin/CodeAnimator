@@ -20,9 +20,23 @@ const DoneState = ({ videoUrl, code, onEdit }) => (
         </a>
       </div>
     </div>
-
+{/* 
     <div className="rounded-[2.5rem] overflow-hidden shadow-2xl border-8 border-[#2a2a2a] bg-black aspect-video relative group">
       <ReactPlayer muted key={videoUrl} url={videoUrl} controls width="100%" height="100%" playing />
+    </div> */}
+
+    <div className="rounded-[2.5rem] overflow-hidden shadow-2xl border-8 border-[#2a2a2a] bg-black aspect-video relative group">
+      <video 
+        key={videoUrl}
+        controls
+        autoPlay
+        muted
+        className="w-full h-full object-contain"
+        crossOrigin="anonymous"
+      >
+        <source src={videoUrl} type="video/mp4" />
+        Your browser does not support the video tag.
+      </video>
     </div>
 
     <div className="rounded-2xl overflow-hidden border border-white/10 bg-[#1e1e1e] p-4 opacity-80 scale-95 origin-top">
