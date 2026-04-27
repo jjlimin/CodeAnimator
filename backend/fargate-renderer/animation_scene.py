@@ -1,537 +1,669 @@
 """
 AnimationScene - The Main Orchestrator
 
-This is the core Manim Scene class that brings everything together:
-- Uses Dispatcher to read storyboard
-- Uses ObjectRegistry to track objects
-- Uses Renderer components to create visuals
-- Executes commands sequentially with proper timing
+Reads the storyboard, maintains the ObjectRegistry, and executes each visual
+command as a timed Manim animation synchronized to OpenAI TTS audio.
+
+Timing contract per step:
+  CAPTION_IN  = 0.2 s  (fast FadeIn so it doesn't eat audio budget)
+  CAPTION_OUT = 0.3 s
+  per_cmd_time = (audio_duration - CAPTION_IN - CAPTION_OUT) / n_cmds
+  Each cmd_* method receives run_time and applies it to its primary play() call.
 """
 
 import json
+import re
+import textwrap
 from typing import Dict, Any, List, Optional
+
 from manim import (
-    Scene, Text, FadeIn, FadeOut, Transform, Wait, ApplyMethod,
-    WHITE, BLACK, GREEN, RED, BLUE, YELLOW,
-    UP, DOWN, LEFT, RIGHT, ORIGIN, config
+    Scene, Text, FadeIn, FadeOut, Transform, ReplacementTransform,
+    Wait, ApplyMethod, Arrow,
+    WHITE, BLACK, GREEN, RED, BLUE, YELLOW, ORANGE,
+    UP, DOWN, LEFT, RIGHT, ORIGIN, config,
 )
+
 from dispatcher import Dispatcher
 from object_registry import ObjectRegistry
 from renderer import (
-    ValueBox, BoxSeries, Pointer, ConsoleOutput, AnimationBuilder,
-    ComparisonDisplay, ConditionDisplay
+    MONO_FONT,
+    ValueBox, StringBox, BooleanBox,
+    BoxSeries, NodeGraph, Pointer,
+    ConsoleOutput, AnimationBuilder,
+    ComparisonDisplay, ConditionDisplay,
 )
+
+# Timing constants (seconds)
+_CAPTION_IN  = 0.2
+_CAPTION_OUT = 0.3
+_MIN_CMD_TIME = 0.25   # floor so very fast steps never feel broken
+
+# Narration caption safe width (characters before wrapping)
+_WRAP_WIDTH = 85
+
+
+def _wrap_narration(text: str) -> str:
+    """Hard-wrap long narration into multiple lines for legible captioning."""
+    return textwrap.fill(text, width=_WRAP_WIDTH)
+
+
+def _eval_comparison(left, operator: str, right) -> bool:
+    """Safely evaluate a comparison between two scalar values."""
+    try:
+        if operator == ">":
+            return left > right
+        if operator == "<":
+            return left < right
+        if operator == "==":
+            return left == right
+        if operator == "!=":
+            return left != right
+        if operator == ">=":
+            return left >= right
+        if operator == "<=":
+            return left <= right
+    except TypeError:
+        pass
+    return False
 
 
 class AnimationScene(Scene):
-    """
-    Main Manim Scene that orchestrates all animations.
-    """
+    """Main Manim scene that orchestrates all animations."""
 
-    def __init__(self, storyboard_path: str, audio_map_path: Optional[str] = None, *args, **kwargs):
-        """
-        Initialize the AnimationScene.
-
-        Args:
-            storyboard_path: Path to the storyboard JSON file.
-            audio_map_path: Optional path to audio map JSON produced by tts_generator.
-                            Keys are step_id strings; values are {path, duration} dicts.
-        """
+    def __init__(
+        self,
+        storyboard_path: str,
+        audio_map_path: Optional[str] = None,
+        *args,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         self.camera.background_color = BLACK
 
-        # Load and validate storyboard
         self.dispatcher = Dispatcher.load_from_file(storyboard_path)
 
-        # Load voiceover audio map (step_id -> {path, duration})
         self._audio_map: Dict[str, Dict] = {}
         if audio_map_path:
             try:
                 with open(audio_map_path) as f:
                     raw = json.load(f)
-                # Normalise keys to strings to match step_id lookups
                 self._audio_map = {str(k): v for k, v in raw.items()}
-                print(f"Loaded voiceover audio map: {len(self._audio_map)} entries")
+                print(f"Loaded audio map: {len(self._audio_map)} entries")
             except Exception as e:
-                print(f"Warning: could not load audio map from {audio_map_path}: {e}")
+                print(f"Warning: could not load audio map: {e}")
 
-        # Initialize registry and console
         self.registry = ObjectRegistry()
         self.console = ConsoleOutput()
         self.add(self.console)
 
-        # Position tracking for auto-arrange
-        self.next_position = ORIGIN
-        self.objects_per_row = 3
-        self.row_height = 2.5
-        self.col_width = 2.5
+        # Auto-layout grid state
+        self._layout_count = 0
+        self._objects_per_row = 3
+        self._row_height = 2.6
+        self._col_width  = 2.8
 
-        # Keep track of current caption for cleanup
-        self.current_caption = None
+        self.current_caption: Optional[Any] = None
+
+    # ------------------------------------------------------------------
+    # Scene entry point
+    # ------------------------------------------------------------------
 
     def construct(self):
-        """Main animation construction method."""
-        print(f"Starting animation: {self.dispatcher.project_name}")
-        print(f"Total steps: {len(self.dispatcher.get_all_steps())}")
-
-        # Process each step sequentially
+        print(f"Starting: {self.dispatcher.project_name}")
+        print(f"Steps: {len(self.dispatcher.get_all_steps())}")
         for step in self.dispatcher.get_all_steps():
             self.execute_step(step)
-
-        # Final wait
         self.wait(1)
 
-    def execute_step(self, step: Dict[str, Any]) -> None:
-        """
-        Execute a single step from the storyboard.
+    # ------------------------------------------------------------------
+    # Step execution with dynamic timing
+    # ------------------------------------------------------------------
 
-        Args:
-            step: The step dictionary.
-        """
-        step_id = step.get("step_id")
+    def execute_step(self, step: Dict[str, Any]) -> None:
+        step_id   = step.get("step_id")
         narration = step.get("narration", "")
-        visual_commands = step.get("visual_commands", [])
+        commands  = step.get("visual_commands", [])
 
         print(f"\n--- Step {step_id} ---")
-        print(f"Narration: {narration[:50]}...")
 
-        # Remove old caption if it exists
+        # Clean up previous caption
         if self.current_caption is not None:
             self.remove(self.current_caption)
             self.current_caption = None
 
-        # Schedule voiceover audio before any animations so it plays concurrently
+        # Queue voiceover (must happen before any play() calls in this step)
         audio_entry = self._audio_map.get(str(step_id))
         if audio_entry:
             self.add_sound(audio_entry["path"])
             audio_duration: Optional[float] = audio_entry["duration"]
-            print(f"  Voiceover queued: {audio_entry['path']} ({audio_duration:.2f}s)")
+            print(f"  Audio: {audio_duration:.2f}s")
         else:
             audio_duration = None
 
-        # Display narration as caption
-        self.current_caption = self.display_narration_caption(narration)
+        # Caption
+        self.current_caption = self._display_caption(narration)
 
-        # Execute all visual commands sequentially (animations run while audio plays)
-        for command in visual_commands:
+        # Per-command time budget
+        n_cmds = max(1, len(commands))
+        if audio_duration is not None:
+            budget = max(0.0, audio_duration - _CAPTION_IN - _CAPTION_OUT)
+            per_cmd = max(_MIN_CMD_TIME, budget / n_cmds)
+        else:
+            per_cmd = max(_MIN_CMD_TIME, self.dispatcher.calculate_step_duration(narration) / n_cmds)
+
+        # Execute commands
+        for cmd in commands:
             try:
-                self.execute_command(command)
+                self.execute_command(cmd, run_time=per_cmd)
             except Exception as e:
-                print(f"Error executing command: {e}")
+                print(f"  Error in command {cmd.get('command')}: {e}")
                 raise
 
-        # Hold until voiceover finishes; fall back to narration-length estimate
+        # Wait for audio tail
         if audio_duration is not None:
-            self.wait(audio_duration)
+            elapsed = _CAPTION_IN + per_cmd * n_cmds
+            tail = max(0.05, audio_duration - elapsed - _CAPTION_OUT)
+            self.wait(tail)
         else:
-            duration = self.dispatcher.calculate_step_duration(narration)
-            self.wait(duration)
+            self.wait(0.4)
 
-        # Fade out the caption
+        # Fade out caption
         if self.current_caption:
-            self.play(FadeOut(self.current_caption))
+            self.play(FadeOut(self.current_caption, run_time=_CAPTION_OUT))
+            self.current_caption = None
 
-    def display_narration_caption(self, narration: str):
-        """
-        Display the narration as a caption at the bottom.
+    # ------------------------------------------------------------------
+    # Caption rendering
+    # ------------------------------------------------------------------
 
-        Args:
-            narration: The narration text.
-            
-        Returns:
-            The caption object for later removal.
-        """
-        # Create narration text
+    def _display_caption(self, narration: str):
+        wrapped = _wrap_narration(narration)
         caption = Text(
-            narration,
+            wrapped,
+            font=MONO_FONT,
             color=WHITE,
-            font_size=14
+            font_size=19,
+            line_spacing=1.25,
         )
-        # Set max width if needed
-        if caption.width > config.frame_width - 1:
-            caption.width = config.frame_width - 1
-        caption.to_edge(DOWN, buff=0.3)
-
-        # Fade in, display, then fade out
+        # Hard-clamp to safe zone (above console panel)
+        max_w = config.frame_width - 1.0
+        if caption.width > max_w:
+            caption.scale_to_fit_width(max_w)
+        caption.to_edge(DOWN, buff=2.6)  # sits above the console panel
         self.add(caption)
-        self.play(FadeIn(caption))
-        self.wait(0.3)
-        
+        self.play(FadeIn(caption, run_time=_CAPTION_IN))
         return caption
 
-    def execute_command(self, command: Dict[str, Any]) -> None:
-        """
-        Execute a single command and create the corresponding animation.
+    # ------------------------------------------------------------------
+    # Command dispatch
+    # ------------------------------------------------------------------
 
-        Args:
-            command: The command dictionary.
-
-        Raises:
-            KeyError: If referenced object does not exist.
-            ValueError: If command parameters are invalid.
-        """
+    def execute_command(self, command: Dict[str, Any], run_time: float = 1.0) -> None:
         cmd_type = command.get("command")
-
-        if cmd_type == "CREATE_VARIABLE":
-            self.cmd_create_variable(command)
-        elif cmd_type == "CREATE_COLLECTION":
-            self.cmd_create_collection(command)
-        elif cmd_type == "UPDATE_VALUE":
-            self.cmd_update_value(command)
-        elif cmd_type == "HIGHLIGHT":
-            self.cmd_highlight(command)
-        elif cmd_type == "PRINT_TO_CONSOLE":
-            self.cmd_print_to_console(command)
-        elif cmd_type == "SWAP":
-            self.cmd_swap(command)
-        elif cmd_type == "APPEND_ELEMENT":
-            self.cmd_append_element(command)
-        elif cmd_type == "MOVE_POINTER":
-            self.cmd_move_pointer(command)
-        elif cmd_type == "DESTROY_OBJECT":
-            self.cmd_destroy_object(command)
-        elif cmd_type == "COMPARE_VALUES":
-            self.cmd_compare_values(command)
-        elif cmd_type == "EVALUATE_CONDITION":
-            self.cmd_evaluate_condition(command)
-        else:
+        dispatch = {
+            # Memory
+            "CREATE_VARIABLE":    self.cmd_create_variable,
+            "CREATE_COLLECTION":  self.cmd_create_collection,
+            "LINK_TARGET":        self.cmd_link_target,
+            "DESTROY_OBJECT":     self.cmd_destroy_object,
+            # State
+            "UPDATE_VALUE":       self.cmd_update_value,
+            "ANIMATE_MATH":       self.cmd_animate_math,
+            "TYPE_CAST":          self.cmd_type_cast,
+            # Collection
+            "SWAP":               self.cmd_swap,
+            "APPEND_ELEMENT":     self.cmd_append_element,
+            "INSERT_AT":          self.cmd_insert_at,
+            "POP_ELEMENT":        self.cmd_pop_element,
+            # Flow / emphasis
+            "MOVE_POINTER":       self.cmd_move_pointer,
+            "COMPARE_VALUES":     self.cmd_compare_values,
+            "HIGHLIGHT":          self.cmd_highlight,
+            "PRINT_TO_CONSOLE":   self.cmd_print_to_console,
+            # Legacy
+            "EVALUATE_CONDITION": self.cmd_evaluate_condition,
+        }
+        handler = dispatch.get(cmd_type)
+        if handler is None:
             raise ValueError(f"Unknown command: {cmd_type}")
+        handler(command, run_time=run_time)
 
-    # ===== COMMAND IMPLEMENTATIONS =====
+    # ------------------------------------------------------------------
+    # Memory commands
+    # ------------------------------------------------------------------
 
-    def cmd_create_variable(self, command: Dict[str, Any]) -> None:
-        """Create a variable box and add it to the scene."""
-        obj_id = command.get("id")
-        label = command.get("label")
-        value = command.get("initial_value")
+    def cmd_create_variable(self, command: Dict[str, Any], run_time: float = 1.0) -> None:
+        obj_id  = command.get("id")
+        label   = command.get("label", "")
+        value   = command.get("initial_value")
+        var_type = command.get("type", "auto")
 
-        if not all([obj_id, label, value is not None]):
-            raise ValueError("CREATE_VARIABLE requires: id, label, initial_value")
+        if not obj_id or value is None:
+            raise ValueError("CREATE_VARIABLE requires: id, initial_value")
 
-        # Create the ValueBox
-        value_box = ValueBox(label=label, value=str(value))
+        # Choose the right box type
+        if var_type == "str" or (var_type == "auto" and isinstance(value, str)):
+            box = StringBox(label=label, value=str(value))
+        elif var_type == "bool" or (var_type == "auto" and isinstance(value, bool)):
+            box = BooleanBox(label=label, value=value)
+        else:
+            box = ValueBox(label=label, value=str(value), var_type=var_type)
 
-        # Position it (auto-arrange)
-        position = self.get_next_position()
-        value_box.move_to(position)
+        box.move_to(self._next_position())
+        self.play(FadeIn(box, run_time=run_time))
+        self.registry.register(obj_id, box)
+        print(f"  CREATE_VARIABLE {obj_id} = {value!r}")
 
-        # Add to scene and registry
-        self.play(FadeIn(value_box))
-        self.registry.register(obj_id, value_box)
-
-        print(f"  Created variable: {obj_id} = {value}")
-
-    def cmd_create_collection(self, command: Dict[str, Any]) -> None:
-        """Create a collection (list/array) box."""
-        obj_id = command.get("id")
-        values = command.get("initial_value", [])
+    def cmd_create_collection(self, command: Dict[str, Any], run_time: float = 1.0) -> None:
+        obj_id  = command.get("id")
+        values  = command.get("initial_value") or command.get("initial_elements", [])
+        label   = command.get("label", "")
 
         if not obj_id:
             raise ValueError("CREATE_COLLECTION requires: id")
 
-        # Ensure values is a list
-        if not isinstance(values, list):
-            values = [values]
+        # LLM sometimes sends the list as a JSON string, e.g. "[1, 2, 3]"
+        if isinstance(values, str):
+            try:
+                values = json.loads(values)
+            except (json.JSONDecodeError, ValueError):
+                values = [values]
 
-        # Create the BoxSeries
-        box_series = BoxSeries(values=[str(v) for v in values])
+        if isinstance(values, dict):
+            visual = NodeGraph(pairs=values, label=label)
+        else:
+            if not isinstance(values, list):
+                values = [values]
+            visual = BoxSeries(values=[str(v) for v in values], label=label)
 
-        # Position it
-        position = self.get_next_position()
-        box_series.move_to(position)
+        visual.move_to(self._next_position())
+        self.play(FadeIn(visual, run_time=run_time))
+        self.registry.register(obj_id, visual)
+        print(f"  CREATE_COLLECTION {obj_id}")
 
-        # Add to scene and registry
-        self.play(FadeIn(box_series))
-        self.registry.register(obj_id, box_series)
-
-        print(f"  Created collection: {obj_id} = {values}")
-
-    def cmd_update_value(self, command: Dict[str, Any]) -> None:
-        """Update the value of an existing variable."""
+    def cmd_link_target(self, command: Dict[str, Any], run_time: float = 1.0) -> None:
+        link_id   = command.get("id")
+        source_id = command.get("source_id")
         target_id = command.get("target_id")
-        new_value = command.get("value")
+
+        if not source_id or not target_id:
+            raise ValueError("LINK_TARGET requires: source_id, target_id")
+
+        source = self.registry.get(source_id)
+        target = self.registry.get(target_id)
+
+        arrow = Arrow(
+            start=source.get_right(),
+            end=target.get_left(),
+            color=YELLOW,
+            stroke_width=2.5,
+            buff=0.08,
+            max_tip_length_to_length_ratio=0.2,
+        )
+        self.play(FadeIn(arrow, run_time=run_time))
+        if link_id:
+            self.registry.register(link_id, arrow)
+        print(f"  LINK_TARGET {source_id} → {target_id}")
+
+    def cmd_destroy_object(self, command: Dict[str, Any], run_time: float = 1.0) -> None:
+        target_id = command.get("target_id")
+        if not target_id:
+            raise ValueError("DESTROY_OBJECT requires: target_id")
+
+        obj = self.registry.destroy(target_id)
+        self.play(FadeOut(obj, run_time=run_time))
+        print(f"  DESTROY_OBJECT {target_id}")
+
+    # ------------------------------------------------------------------
+    # State commands
+    # ------------------------------------------------------------------
+
+    def cmd_update_value(self, command: Dict[str, Any], run_time: float = 1.0) -> None:
+        """Morph the existing box into a new one with the updated value."""
+        target_id = command.get("target_id")
+        new_value = command.get("value") if command.get("value") is not None else command.get("new_value")
 
         if not target_id or new_value is None:
-            raise ValueError("UPDATE_VALUE requires: target_id, value")
+            raise ValueError("UPDATE_VALUE requires: target_id, value (or new_value)")
 
-        # Get the object
-        obj = self.registry.get(target_id)
+        old_obj = self.registry.get(target_id)
+        new_obj = self._rebuild_box(old_obj, value=str(new_value))
+        new_obj.move_to(old_obj.get_center())
+        self.play(ReplacementTransform(old_obj, new_obj, run_time=run_time))
+        self.registry.update(target_id, new_obj)
+        print(f"  UPDATE_VALUE {target_id} → {new_value!r}")
 
-        # If it's a ValueBox, update the value text
-        if isinstance(obj, ValueBox):
-            old_value_text = obj.value_text
-            new_value_text = Text(
-                str(new_value),
-                color=WHITE,
-                font_size=18,
-            )
-            new_value_text.move_to(old_value_text.get_center())
+    def cmd_animate_math(self, command: Dict[str, Any], run_time: float = 1.0) -> None:
+        """Display an expression and optionally morph it into its result."""
+        expression = command.get("expression", "")
+        result     = command.get("result")
+        target_id  = command.get("target_id")
+        obj_id     = command.get("id")
 
-            # Animate the transformation
-            self.play(Transform(old_value_text, new_value_text))
-            obj.value_text = new_value_text
-            obj.value = str(new_value)
+        expr_text = Text(expression, font=MONO_FONT, color=YELLOW, font_size=24)
 
-            print(f"  Updated {target_id} to {new_value}")
+        if target_id and self.registry.has(target_id):
+            obj = self.registry.get(target_id)
+            expr_text.next_to(obj, UP, buff=0.4)
         else:
-            raise ValueError(f"Object {target_id} is not a ValueBox")
+            expr_text.move_to(self._next_position())
 
-    def cmd_highlight(self, command: Dict[str, Any]) -> None:
-        """Highlight an object with a color."""
+        if result is not None:
+            result_text = Text(str(result), font=MONO_FONT, color=GREEN, font_size=24)
+            result_text.move_to(expr_text.get_center())
+            self.play(FadeIn(expr_text, run_time=run_time * 0.45))
+            self.play(ReplacementTransform(expr_text, result_text, run_time=run_time * 0.55))
+            if obj_id:
+                self.registry.register(obj_id, result_text)
+        else:
+            self.play(FadeIn(expr_text, run_time=run_time))
+            if obj_id:
+                self.registry.register(obj_id, expr_text)
+
+        print(f"  ANIMATE_MATH {expression!r} → {result!r}")
+
+    def cmd_type_cast(self, command: Dict[str, Any], run_time: float = 1.0) -> None:
+        """Morph a variable box into a different type box."""
         target_id = command.get("target_id")
-        color_str = command.get("color", "GREEN")
+        new_type  = command.get("new_type", "auto")
 
         if not target_id:
-            raise ValueError("HIGHLIGHT requires: target_id")
+            raise ValueError("TYPE_CAST requires: target_id")
 
-        # Convert string color to Manim color object
-        color_map = {
-            "GREEN": GREEN,
-            "RED": RED,
-            "BLUE": BLUE,
-            "YELLOW": YELLOW,
-            "WHITE": WHITE,
-        }
-        color = color_map.get(color_str, GREEN)
+        old_obj = self.registry.get(target_id)
+        label = getattr(old_obj, "label", "")
+        value = getattr(old_obj, "value", "")
 
-        # Get the object
-        obj = self.registry.get(target_id)
-
-        # If it's a ValueBox, highlight the box component
-        if isinstance(obj, ValueBox):
-            box = obj.box
-            original_stroke = box.stroke_color
-            original_width = 2
-            
-            # Flash effect: increase stroke width and change color
-            self.play(ApplyMethod(box.set_stroke, color, 4))
-            self.wait(0.2)
-            # Return to normal
-            self.play(ApplyMethod(box.set_stroke, original_stroke, original_width))
-            self.wait(0.1)
-            # One more flash for emphasis
-            self.play(ApplyMethod(box.set_stroke, color, 4))
-            self.wait(0.2)
-            self.play(ApplyMethod(box.set_stroke, original_stroke, original_width))
+        if new_type == "str":
+            new_obj = StringBox(label=label, value=value)
+        elif new_type == "bool":
+            new_obj = BooleanBox(label=label, value=value)
         else:
-            # For other objects, try to apply the highlight
-            self.play(ApplyMethod(obj.set_stroke, color, 4))
-            self.wait(0.2)
-            self.play(ApplyMethod(obj.set_stroke, WHITE, 2))
+            new_obj = ValueBox(label=label, value=value, var_type=new_type)
 
-        print(f"  Highlighted {target_id} with color {color_str}")
+        new_obj.move_to(old_obj.get_center())
+        self.play(ReplacementTransform(old_obj, new_obj, run_time=run_time))
+        self.registry.update(target_id, new_obj)
+        print(f"  TYPE_CAST {target_id} → {new_type}")
 
-    def cmd_print_to_console(self, command: Dict[str, Any]) -> None:
-        """Print output to the console."""
-        value = command.get("value")
+    # ------------------------------------------------------------------
+    # Collection commands
+    # ------------------------------------------------------------------
 
-        if value is None:
-            raise ValueError("PRINT_TO_CONSOLE requires: value")
+    def cmd_swap(self, command: Dict[str, Any], run_time: float = 1.0) -> None:
+        target_id = command.get("target_id") or command.get("collection_id")
+        index_a   = command.get("index_a")
+        index_b   = command.get("index_b")
 
-        # Add to console
-        self.console.add_line(str(value))
-        
-        # Update the display by creating a new text and transforming
-        new_output_text = Text(
-            self.console.output_text.text,
-            color=WHITE,
-            font_size=16,
-        )
-        new_output_text.move_to(self.console.background.get_center())
-        
-        self.play(Transform(self.console.output_text, new_output_text))
+        if target_id is None or index_a is None or index_b is None:
+            raise ValueError("SWAP requires: target_id (or collection_id), index_a, index_b")
 
-        print(f"  Printed to console: {value}")
+        index_a = self._resolve_index(index_a)
+        index_b = self._resolve_index(index_b)
 
-    def cmd_swap(self, command: Dict[str, Any]) -> None:
-        """Swap two elements in a collection."""
-        target_id = command.get("target_id")
-        index_a = command.get("index_a")
-        index_b = command.get("index_b")
-
-        if not target_id or index_a is None or index_b is None:
-            raise ValueError("SWAP requires: target_id, index_a, index_b")
-
-        # Get the object
         obj = self.registry.get(target_id)
+        if not isinstance(obj, BoxSeries):
+            raise ValueError(f"{target_id} is not a BoxSeries")
+        if index_a >= len(obj.values) or index_b >= len(obj.values):
+            raise ValueError(f"Index out of range for {target_id}")
 
-        if isinstance(obj, BoxSeries):
-            # Get the two boxes
-            boxes = list(obj.submobjects)
-            if index_a >= len(boxes) or index_b >= len(boxes):
-                raise ValueError(f"Index out of range for {target_id}")
+        new_values = obj.values.copy()
+        new_values[index_a], new_values[index_b] = new_values[index_b], new_values[index_a]
+        new_series = BoxSeries(values=new_values, label=obj.label)
+        new_series.move_to(obj.get_center())
+        self.play(ReplacementTransform(obj, new_series, run_time=run_time))
+        self.registry.update(target_id, new_series)
+        print(f"  SWAP {target_id}[{index_a}] ↔ [{index_b}]")
 
-            box_a = boxes[index_a]
-            box_b = boxes[index_b]
-
-            # Create swap animation
-            anim = AnimationBuilder.swap_animation(box_a, box_b, duration=0.5)
-            self.play(anim)
-
-            # Update values list
-            obj.values[index_a], obj.values[index_b] = obj.values[index_b], obj.values[index_a]
-
-            print(f"  Swapped {target_id}[{index_a}] and [{index_b}]")
-        else:
-            raise ValueError(f"Object {target_id} is not a BoxSeries")
-
-    def cmd_append_element(self, command: Dict[str, Any]) -> None:
-        """Append an element to a collection."""
+    def cmd_append_element(self, command: Dict[str, Any], run_time: float = 1.0) -> None:
         target_id = command.get("target_id")
-        element = command.get("element")
+        element   = command.get("element")
 
         if not target_id or element is None:
             raise ValueError("APPEND_ELEMENT requires: target_id, element")
 
-        # Get the object
         obj = self.registry.get(target_id)
+        if not isinstance(obj, BoxSeries):
+            raise ValueError(f"{target_id} is not a BoxSeries")
 
-        if isinstance(obj, BoxSeries):
-            obj.values.append(str(element))
-            # Recreate the BoxSeries (simplified approach)
-            # In a production system, you'd animate this more smoothly
-            new_series = BoxSeries(values=obj.values)
-            new_series.move_to(obj.get_center())
-            self.play(Transform(obj, new_series))
-            self.registry.update(target_id, new_series)
+        new_values = obj.values + [str(element)]
+        new_series = BoxSeries(values=new_values, label=obj.label)
+        new_series.move_to(obj.get_center())
+        self.play(ReplacementTransform(obj, new_series, run_time=run_time))
+        self.registry.update(target_id, new_series)
+        print(f"  APPEND_ELEMENT {target_id} ← {element!r}")
 
-            print(f"  Appended {element} to {target_id}")
-        else:
-            raise ValueError(f"Object {target_id} is not a BoxSeries")
-
-    def cmd_move_pointer(self, command: Dict[str, Any]) -> None:
-        """Move a pointer to a new position."""
-        pointer_id = command.get("pointer_id")
+    def cmd_insert_at(self, command: Dict[str, Any], run_time: float = 1.0) -> None:
         target_id = command.get("target_id")
+        index     = command.get("index", 0)
+        element   = command.get("element")
 
-        if not pointer_id or not target_id:
-            raise ValueError("MOVE_POINTER requires: pointer_id, target_id")
+        if not target_id or element is None:
+            raise ValueError("INSERT_AT requires: target_id, index, element")
 
-        # Get pointer and target
-        pointer = self.registry.get(pointer_id)
-        target = self.registry.get(target_id)
+        obj = self.registry.get(target_id)
+        if not isinstance(obj, BoxSeries):
+            raise ValueError(f"{target_id} is not a BoxSeries")
 
-        # Move pointer next to target
-        new_position = target.get_center() + UP * 0.8
-        self.play(pointer.animate.move_to(new_position))
+        new_values = obj.values.copy()
+        new_values.insert(index, str(element))
+        new_series = BoxSeries(values=new_values, label=obj.label)
+        new_series.move_to(obj.get_center())
+        self.play(ReplacementTransform(obj, new_series, run_time=run_time))
+        self.registry.update(target_id, new_series)
+        print(f"  INSERT_AT {target_id}[{index}] = {element!r}")
 
-        print(f"  Moved {pointer_id} to {target_id}")
-
-    def cmd_destroy_object(self, command: Dict[str, Any]) -> None:
-        """Remove an object from the scene."""
+    def cmd_pop_element(self, command: Dict[str, Any], run_time: float = 1.0) -> None:
         target_id = command.get("target_id")
+        index     = command.get("index", -1)
 
         if not target_id:
-            raise ValueError("DESTROY_OBJECT requires: target_id")
+            raise ValueError("POP_ELEMENT requires: target_id")
 
-        # Get and remove from registry
-        obj = self.registry.destroy(target_id)
+        obj = self.registry.get(target_id)
+        if not isinstance(obj, BoxSeries):
+            raise ValueError(f"{target_id} is not a BoxSeries")
+        if not obj.values:
+            raise ValueError(f"Cannot pop from empty collection {target_id}")
 
-        # Fade out from scene
-        self.play(FadeOut(obj))
+        new_values = obj.values.copy()
+        popped = new_values.pop(index)
 
-        print(f"  Destroyed {target_id}")
-
-    def cmd_compare_values(self, command: Dict[str, Any]) -> None:
-        """
-        Create a visual comparison display between two values.
-        Shows: [left_value] <operator> [right_value]
-        """
-        left_val = command.get("left")
-        right_val = command.get("right")
-        result_id = command.get("result_id")
-        operator = command.get("operator", ">")
-
-        if not all([left_val is not None, right_val is not None, result_id]):
-            raise ValueError("COMPARE_VALUES requires: left, right, result_id")
-
-        # Determine the operator (try to infer if not provided)
-        if operator == ">":
-            comparison_result = left_val > right_val
-        elif operator == "<":
-            comparison_result = left_val < right_val
-        elif operator == "==":
-            comparison_result = left_val == right_val
-        elif operator == "!=":
-            comparison_result = left_val != right_val
-        elif operator == ">=":
-            comparison_result = left_val >= right_val
-        elif operator == "<=":
-            comparison_result = left_val <= right_val
+        if new_values:
+            new_series = BoxSeries(values=new_values, label=obj.label)
+            new_series.move_to(obj.get_center())
+            self.play(ReplacementTransform(obj, new_series, run_time=run_time))
+            self.registry.update(target_id, new_series)
         else:
-            # Default to greater-than
-            comparison_result = left_val > right_val
-            operator = ">"
+            # Last element removed — destroy the whole series
+            self.play(FadeOut(obj, run_time=run_time))
+            self.registry.destroy(target_id)
 
-        # Create the comparison display
-        comparison_display = ComparisonDisplay(
+        print(f"  POP_ELEMENT {target_id}[{index}] = {popped!r}")
+
+    # ------------------------------------------------------------------
+    # Flow / emphasis commands
+    # ------------------------------------------------------------------
+
+    def cmd_move_pointer(self, command: Dict[str, Any], run_time: float = 1.0) -> None:
+        """Glide an existing pointer (or create one) to above a target object."""
+        pointer_id = command.get("pointer_id")
+        target_id  = command.get("target_id")
+        index      = command.get("index")  # for BoxSeries: point to specific cell
+
+        if not target_id:
+            raise ValueError("MOVE_POINTER requires: target_id")
+        # Auto-generate pointer_id when the LLM omits it
+        if not pointer_id:
+            pointer_id = f"ptr_{target_id}"
+
+        if index is not None:
+            index = self._resolve_index(index)
+
+        target = self.registry.get(target_id)
+
+        # Determine destination: cell top if BoxSeries+index, else object top
+        if isinstance(target, BoxSeries) and index is not None:
+            cells = list(target.submobjects)
+            if 0 <= index < len(cells):
+                dest = cells[index].get_top() + UP * 0.45
+            else:
+                dest = target.get_top() + UP * 0.45
+        else:
+            dest = target.get_top() + UP * 0.45
+
+        if self.registry.has(pointer_id):
+            pointer = self.registry.get(pointer_id)
+            self.play(pointer.animate.move_to(dest), run_time=run_time)
+        else:
+            pointer = Pointer()
+            pointer.move_to(dest)
+            self.play(FadeIn(pointer, run_time=run_time))
+            self.registry.register(pointer_id, pointer)
+
+        print(f"  MOVE_POINTER {pointer_id} → {target_id}" + (f"[{index}]" if index is not None else ""))
+
+    def cmd_compare_values(self, command: Dict[str, Any], run_time: float = 1.0) -> None:
+        """Show a comparison display, then flash Green (True) or Red (False)."""
+        left_val  = command.get("left")
+        right_val = command.get("right")
+        operator  = command.get("operator", "==")
+        result_id = command.get("result_id")
+
+        if left_val is None or right_val is None:
+            raise ValueError("COMPARE_VALUES requires: left, right")
+
+        result = _eval_comparison(left_val, operator, right_val)
+        flash_color = GREEN if result else RED
+
+        display = ComparisonDisplay(
             left_value=str(left_val),
             right_value=str(right_val),
             operator=operator,
+            result=result,
         )
+        display.move_to(self._next_position())
 
-        # Position and add to scene
-        position = self.get_next_position()
-        comparison_display.move_to(position)
-        self.play(FadeIn(comparison_display))
+        # FadeIn then color-flash the result
+        self.play(FadeIn(display, run_time=run_time * 0.55))
+        self.play(ApplyMethod(display.set_stroke, flash_color, 5), run_time=run_time * 0.25)
+        self.play(ApplyMethod(display.set_stroke, WHITE, 2),        run_time=run_time * 0.20)
 
-        # Store the comparison result in registry for EVALUATE_CONDITION to use
-        self.registry.register(result_id, comparison_display)
-        self.registry.set_metadata(result_id, "comparison_result", comparison_result)
+        if result_id:
+            self.registry.register(result_id, display)
+            self.registry.set_metadata(result_id, "comparison_result", result)
 
-        print(f"  Compared: {left_val} {operator} {right_val} = {comparison_result}")
+        print(f"  COMPARE_VALUES {left_val} {operator} {right_val} = {result}")
 
-    def cmd_evaluate_condition(self, command: Dict[str, Any]) -> None:
-        """
-        Display the result of a condition evaluation (TRUE or FALSE).
-        Shows a colored circle with the result.
-        """
+    def cmd_highlight(self, command: Dict[str, Any], run_time: float = 1.0) -> None:
+        target_id = command.get("target_id")
+        color_str = command.get("color", "GREEN").upper()
+
+        if not target_id:
+            raise ValueError("HIGHLIGHT requires: target_id")
+
+        color_map = {
+            "GREEN": GREEN, "RED": RED, "BLUE": BLUE,
+            "YELLOW": YELLOW, "WHITE": WHITE, "ORANGE": ORANGE,
+        }
+        color = color_map.get(color_str, GREEN)
+        obj   = self.registry.get(target_id)
+        box   = getattr(obj, "box", obj)
+
+        flash_t = run_time / 2
+        self.play(ApplyMethod(box.set_stroke, color, 5), run_time=flash_t)
+        self.play(ApplyMethod(box.set_stroke, WHITE,  2), run_time=flash_t)
+        print(f"  HIGHLIGHT {target_id} ({color_str})")
+
+    def cmd_print_to_console(self, command: Dict[str, Any], run_time: float = 1.0) -> None:
+        value = command.get("value")
+        if value is None:
+            raise ValueError("PRINT_TO_CONSOLE requires: value")
+
+        self.console.add_line(str(value))
+        new_text = Text(
+            self.console.output_text.text,
+            font=MONO_FONT,
+            color=WHITE,
+            font_size=13,
+        )
+        new_text.move_to(self.console.background.get_center() + DOWN * 0.12)
+        self.play(Transform(self.console.output_text, new_text, run_time=run_time))
+        print(f"  PRINT_TO_CONSOLE: {value!r}")
+
+    # ------------------------------------------------------------------
+    # Legacy: EVALUATE_CONDITION (kept for backward compatibility)
+    # ------------------------------------------------------------------
+
+    def cmd_evaluate_condition(self, command: Dict[str, Any], run_time: float = 1.0) -> None:
         condition_id = command.get("condition_id")
-
         if not condition_id:
             raise ValueError("EVALUATE_CONDITION requires: condition_id")
 
-        # Get the comparison result from metadata
         try:
-            comparison_result = self.registry.get_metadata(condition_id, "comparison_result")
-        except (KeyError, AttributeError):
-            # If metadata not found, default to True
-            comparison_result = True
+            result = self.registry.get_metadata(condition_id, "comparison_result")
+        except KeyError:
+            result = True
 
-        # Create the condition display
-        condition_display = ConditionDisplay(result=comparison_result)
+        cond_display = ConditionDisplay(result=result)
 
-        # Position it below the comparison display
-        comparison_obj = self.registry.get(condition_id)
-        if comparison_obj:
-            position = comparison_obj.get_center() + DOWN * 1.5
+        cmp_obj = self.registry.get(condition_id) if self.registry.has(condition_id) else None
+        if cmp_obj:
+            cond_display.move_to(cmp_obj.get_center() + DOWN * 1.6)
         else:
-            position = self.get_next_position()
+            cond_display.move_to(self._next_position())
 
-        condition_display.move_to(position)
-        self.play(FadeIn(condition_display))
+        self.play(FadeIn(cond_display, run_time=run_time))
+        self.registry.register(f"{condition_id}_result", cond_display)
+        print(f"  EVALUATE_CONDITION {condition_id} = {result}")
 
-        # Register the condition display
-        result_display_id = f"{condition_id}_result"
-        self.registry.register(result_display_id, condition_display)
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
 
-        print(f"  Evaluated condition: {condition_id} = {comparison_result}")
-
-    # ===== HELPER METHODS =====
-
-    def get_next_position(self):
-        """
-        Get the next auto-arranged position for a new object.
-
-        Returns:
-            The next position as a numpy array [x, y, z].
-        """
-        # Simple grid layout
-        row = len(self.registry.list_all()) // self.objects_per_row
-        col = len(self.registry.list_all()) % self.objects_per_row
-
-        x = col * self.col_width - (self.objects_per_row - 1) * self.col_width / 2
-        y = 2 - row * self.row_height
-
+    def _next_position(self):
+        """Auto-grid: place each new object in the next available cell."""
+        n   = self._layout_count
+        row = n // self._objects_per_row
+        col = n % self._objects_per_row
+        self._layout_count += 1
+        x = col * self._col_width - (self._objects_per_row - 1) * self._col_width / 2
+        y = 2.0 - row * self._row_height
         return [x, y, 0]
 
+    def _resolve_index(self, val) -> int:
+        """Resolve an index to a concrete integer.
+
+        Accepts integers directly, or variable-expression strings like "j" or "j+1"
+        by looking up the current value in the registry (also tries "<name>_ptr").
+        """
+        if isinstance(val, int):
+            return val
+        try:
+            return int(val)
+        except (ValueError, TypeError):
+            pass
+        m = re.match(r'^([A-Za-z_]\w*)([+-]\d+)?$', str(val).strip())
+        if m:
+            var_name, offset_str = m.group(1), m.group(2)
+            offset = int(offset_str) if offset_str else 0
+            for candidate in (var_name, var_name + "_ptr"):
+                if self.registry.has(candidate):
+                    raw = getattr(self.registry.get(candidate), "value", None)
+                    if raw is not None:
+                        try:
+                            return int(str(raw)) + offset
+                        except (ValueError, TypeError):
+                            pass
+        raise ValueError(f"Cannot resolve index expression: {val!r}")
+
+    def _rebuild_box(self, old_obj, *, value: str):
+        """Create a same-typed replacement box with a new value."""
+        label    = getattr(old_obj, "label", "")
+        var_type = getattr(old_obj, "var_type", "auto")
+
+        if isinstance(old_obj, StringBox):
+            return StringBox(label=label, value=value)
+        if isinstance(old_obj, BooleanBox):
+            return BooleanBox(label=label, value=value)
+        return ValueBox(label=label, value=value, var_type=var_type)

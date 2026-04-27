@@ -4,6 +4,7 @@ import json
 import shutil
 import subprocess
 import boto3
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from botocore.exceptions import NoCredentialsError
 from manim import config
 
@@ -50,20 +51,32 @@ def _generate_voiceovers(storyboard_path: str, audio_dir: str) -> str:
         storyboard = json.load(f)
 
     steps = storyboard.get("script", [])
+    tts_steps = [
+        (step.get("step_id"), step.get("narration", "").strip())
+        for step in steps
+        if step.get("narration", "").strip()
+    ]
+
+    if not tts_steps:
+        return ""
+
     audio_map = {}
 
-    for step in steps:
-        step_id = step.get("step_id")
-        narration = step.get("narration", "").strip()
-        if not narration:
-            continue
-        try:
-            audio_path = generate_step_audio(step_id, narration, audio_dir)
-            duration = get_audio_duration(audio_path)
-            audio_map[step_id] = {"path": audio_path, "duration": duration}
-            print(f"  Voiceover step {step_id}: {duration:.2f}s -> {audio_path}")
-        except Exception as e:
-            print(f"  Warning: TTS failed for step {step_id}: {e}")
+    def _generate_one(step_id, narration):
+        audio_path = generate_step_audio(step_id, narration, audio_dir)
+        duration = get_audio_duration(audio_path)
+        return step_id, audio_path, duration
+
+    with ThreadPoolExecutor(max_workers=min(8, len(tts_steps))) as executor:
+        futures = {executor.submit(_generate_one, sid, narr): sid for sid, narr in tts_steps}
+        for future in as_completed(futures):
+            try:
+                step_id, audio_path, duration = future.result()
+                audio_map[step_id] = {"path": audio_path, "duration": duration}
+                print(f"  Voiceover step {step_id}: {duration:.2f}s -> {audio_path}")
+            except Exception as e:
+                step_id = futures[future]
+                print(f"  Warning: TTS failed for step {step_id}: {e}")
 
     if not audio_map:
         return ""
@@ -86,7 +99,7 @@ def render_animation(storyboard_path: str, output_format: str = "mp4") -> str | 
 
     config.pixel_height = 1080
     config.pixel_width = 1920
-    config.frame_rate = 60
+    config.frame_rate = 30
 
     base_name = os.path.basename(storyboard_path).split('.')[0]
     file_ext = "mp4" if output_format == "mp4" else "gif"

@@ -1,17 +1,31 @@
 """
 TTS Generator - OpenAI Text-to-Speech for voiceovers.
 
-Generates MP3 audio files from narration text using OpenAI tts-1 / alloy voice,
+Generates MP3 audio files from narration text using OpenAI gpt-4o-mini-tts / alloy voice,
 calculates their durations, and handles cleanup of temporary files.
 """
 
 import os
 from mutagen.mp3 import MP3
 
+# Module-level client — created once and reused across all parallel TTS calls
+_client = None
+
+
+def _get_client():
+    global _client
+    if _client is None:
+        from openai import OpenAI
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY environment variable is not set.")
+        _client = OpenAI(api_key=api_key)
+    return _client
+
 
 def generate_step_audio(step_id: int, text: str, audio_dir: str) -> str:
     """
-    Generate TTS audio for a single step using OpenAI tts-1 (alloy voice).
+    Generate TTS audio for a single step using OpenAI gpt-4o-mini-tts (alloy voice).
 
     Args:
         step_id: Step identifier, used for the output filename.
@@ -25,18 +39,12 @@ def generate_step_audio(step_id: int, text: str, audio_dir: str) -> str:
         RuntimeError: If OPENAI_API_KEY is not set.
         openai.OpenAIError: On API failure.
     """
-    from openai import OpenAI
-
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY environment variable is not set.")
-
-    client = OpenAI(api_key=api_key)
+    client = _get_client()
 
     audio_path = os.path.abspath(os.path.join(audio_dir, f"step_{step_id}.mp3"))
 
     response = client.audio.speech.create(
-        model="tts-1",
+        model="gpt-4o-mini-tts",
         voice="alloy",
         input=text,
     )

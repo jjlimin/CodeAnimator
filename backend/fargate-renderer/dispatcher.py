@@ -144,15 +144,27 @@ class Dispatcher:
             raise ValueError(f"Command missing required field: '{required_field}'")
 
         valid_commands = [
+            # Memory
             "CREATE_VARIABLE",
             "CREATE_COLLECTION",
+            "LINK_TARGET",
+            "DESTROY_OBJECT",
+            # State
             "UPDATE_VALUE",
-            "HIGHLIGHT",
-            "PRINT_TO_CONSOLE",
+            "ANIMATE_MATH",
+            "TYPE_CAST",
+            # Collection
             "SWAP",
             "APPEND_ELEMENT",
+            "INSERT_AT",
+            "POP_ELEMENT",
+            # Flow / emphasis
             "MOVE_POINTER",
-            "DESTROY_OBJECT"
+            "COMPARE_VALUES",
+            "HIGHLIGHT",
+            "PRINT_TO_CONSOLE",
+            # Legacy
+            "EVALUATE_CONDITION",
         ]
 
         cmd_type = command.get("command")

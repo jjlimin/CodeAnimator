@@ -1,121 +1,184 @@
 """
 Renderer - The Artist
 
-This module contains visual components and animation logic.
-It translates high-level commands into smooth Manim animations.
+Visual components for the CodeAnimator engine.
+All Text uses MONO_FONT for consistent, readable, monospace rendering.
 """
 
-from typing import Tuple, Optional, List
+from typing import List, Dict, Any, Optional, Tuple
 from manim import (
-    VGroup, Rectangle, Text, Arrow,
+    VGroup, Rectangle, RoundedRectangle, Text, Arrow, Line, Circle,
     FadeIn, FadeOut, Transform, AnimationGroup, ApplyMethod,
     UP, DOWN, LEFT, RIGHT, ORIGIN, WHITE, BLACK, GREEN, RED,
-    YELLOW, BLUE, PURE_BLUE, PURE_RED,
-    Mobject, VMobject, RoundedRectangle, Circle, Line
+    YELLOW, BLUE, ORANGE, PURE_RED,
+    VMobject,
 )
 
-# PURE_GREEN is not exported by this version of Manim — define it here
+# Defined here because PURE_GREEN is not exported by manim 0.18
 PURE_GREEN = GREEN
 
+# Primary monospace font — DejaVu Sans Mono ships with most Linux/Docker images.
+# Swap to "Roboto Mono" or "Consolas" if installed in the container.
+MONO_FONT = "DejaVu Sans Mono"
+
+# Stroke colors keyed by variable type
+TYPE_COLORS: Dict[str, Any] = {
+    "int":   WHITE,
+    "float": YELLOW,
+    "str":   BLUE,
+    "bool":  GREEN,
+    "auto":  WHITE,
+}
+
+
+# ---------------------------------------------------------------------------
+# Core box types
+# ---------------------------------------------------------------------------
 
 class ValueBox(VGroup):
-    """
-    A visual representation of a single variable.
-    Contains: RoundedRectangle (box) + Text (label) + Text (value)
-    """
+    """Single numeric / generic variable: rounded box + label + value."""
 
     def __init__(
         self,
         label: str,
         value: str,
-        box_width: float = 2,
-        box_height: float = 0.8,
-        label_color: str = WHITE,
-        value_color: str = WHITE,
-        stroke_color: str = WHITE,
-        stroke_width: float = 2,
+        var_type: str = "auto",
+        box_width: float = 2.3,
+        box_height: float = 0.95,
     ):
-        """
-        Initialize a ValueBox.
+        stroke = TYPE_COLORS.get(var_type, WHITE)
 
-        Args:
-            label: Variable name.
-            value: Initial value to display.
-            box_width: Width of the box.
-            box_height: Height of the box.
-            label_color: Color of the label text.
-            value_color: Color of the value text.
-            stroke_color: Color of the box outline.
-            stroke_width: Width of the box outline.
-        """
-        # Create the rectangle
-        box = Rectangle(
+        box = RoundedRectangle(
+            corner_radius=0.12,
             width=box_width,
             height=box_height,
-            stroke_color=stroke_color,
-            stroke_width=stroke_width,
+            stroke_color=stroke,
+            stroke_width=2,
             fill_color=BLACK,
             fill_opacity=1,
         )
+        label_text = Text(label, font=MONO_FONT, color=stroke, font_size=17)
+        value_text = Text(str(value), font=MONO_FONT, color=WHITE, font_size=20)
 
-        # Create label text (top)
-        label_text = Text(
-            label,
-            color=label_color,
-            font_size=20,
-        )
+        # Fit oversized text
+        for t, limit in ((label_text, box_width - 0.2), (value_text, box_width - 0.2)):
+            if t.width > limit:
+                t.scale_to_fit_width(limit)
 
-        # Create value text (bottom)
-        value_text = Text(
-            str(value),
-            color=value_color,
-            font_size=18,
-        )
+        label_text.move_to(box.get_center() + UP * 0.24)
+        value_text.move_to(box.get_center() + DOWN * 0.24)
 
-        # Arrange vertically within the box
-        label_text.move_to(box.get_center() + UP * 0.2)
-        value_text.move_to(box.get_center() + DOWN * 0.25)
-
-        # Group all components
         super().__init__(box, label_text, value_text)
+        self.box = box
+        self.label_text = label_text
+        self.value_text = value_text
+        self.label = label
+        self.value = str(value)
+        self.var_type = var_type
 
-        # Store references for easy access
+
+class StringBox(VGroup):
+    """String variable: blue stroke, value shown in double-quotes."""
+
+    def __init__(
+        self,
+        label: str,
+        value: str,
+        box_width: float = 2.6,
+        box_height: float = 0.95,
+    ):
+        box = RoundedRectangle(
+            corner_radius=0.12,
+            width=box_width,
+            height=box_height,
+            stroke_color=BLUE,
+            stroke_width=2,
+            fill_color=BLACK,
+            fill_opacity=1,
+        )
+        label_text = Text(label, font=MONO_FONT, color=BLUE, font_size=17)
+        value_text = Text(f'"{value}"', font=MONO_FONT, color=WHITE, font_size=18)
+
+        for t, limit in ((label_text, box_width - 0.2), (value_text, box_width - 0.2)):
+            if t.width > limit:
+                t.scale_to_fit_width(limit)
+
+        label_text.move_to(box.get_center() + UP * 0.24)
+        value_text.move_to(box.get_center() + DOWN * 0.24)
+
+        super().__init__(box, label_text, value_text)
         self.box = box
         self.label_text = label_text
         self.value_text = value_text
         self.label = label
         self.value = value
+        self.var_type = "str"
 
+
+class BooleanBox(VGroup):
+    """Boolean variable: green stroke for True, red for False."""
+
+    def __init__(
+        self,
+        label: str,
+        value,
+        box_width: float = 2.3,
+        box_height: float = 0.95,
+    ):
+        bool_val = str(value).strip().lower() in ("true", "1", "yes")
+        color = GREEN if bool_val else RED
+        display = "True" if bool_val else "False"
+
+        box = RoundedRectangle(
+            corner_radius=0.12,
+            width=box_width,
+            height=box_height,
+            stroke_color=color,
+            stroke_width=2.5,
+            fill_color=BLACK,
+            fill_opacity=1,
+        )
+        label_text = Text(label, font=MONO_FONT, color=color, font_size=17)
+        value_text = Text(display, font=MONO_FONT, color=color, font_size=20, weight="BOLD")
+
+        for t, limit in ((label_text, box_width - 0.2), (value_text, box_width - 0.2)):
+            if t.width > limit:
+                t.scale_to_fit_width(limit)
+
+        label_text.move_to(box.get_center() + UP * 0.24)
+        value_text.move_to(box.get_center() + DOWN * 0.24)
+
+        super().__init__(box, label_text, value_text)
+        self.box = box
+        self.label_text = label_text
+        self.value_text = value_text
+        self.label = label
+        self.value = display
+        self.var_type = "bool"
+        self.bool_val = bool_val
+
+
+# ---------------------------------------------------------------------------
+# Collection types
+# ---------------------------------------------------------------------------
 
 class BoxSeries(VGroup):
-    """
-    A visual representation of a list/array.
-    Contains multiple boxes arranged horizontally.
-    """
+    """List / array as horizontal cells with index numbers below."""
 
     def __init__(
         self,
         values: List[str],
-        box_width: float = 0.8,
-        box_height: float = 0.8,
-        spacing: float = 0.3,
-        stroke_color: str = WHITE,
+        label: str = "",
+        box_width: float = 0.95,
+        box_height: float = 0.90,
+        spacing: float = 0.06,
+        stroke_color=WHITE,
         stroke_width: float = 2,
     ):
-        """
-        Initialize a BoxSeries.
-
-        Args:
-            values: List of initial values.
-            box_width: Width of each box.
-            box_height: Height of each box.
-            spacing: Space between boxes.
-            stroke_color: Color of box outlines.
-            stroke_width: Width of box outlines.
-        """
-        boxes = []
+        cells = []
         for i, val in enumerate(values):
-            box = RoundedRectangle(
+            cell_box = RoundedRectangle(
+                corner_radius=0.08,
                 width=box_width,
                 height=box_height,
                 stroke_color=stroke_color,
@@ -123,288 +186,258 @@ class BoxSeries(VGroup):
                 fill_color=BLACK,
                 fill_opacity=1,
             )
+            cell_text = Text(str(val), font=MONO_FONT, color=WHITE, font_size=16)
+            if cell_text.width > box_width - 0.1:
+                cell_text.scale_to_fit_width(box_width - 0.1)
+            cell_text.move_to(cell_box.get_center())
 
-            text = Text(
-                str(val),
-                color=WHITE,
-                font_size=16,
-            )
-            text.move_to(box.get_center())
+            idx_text = Text(str(i), font=MONO_FONT, color=YELLOW, font_size=11)
+            idx_text.next_to(cell_box, DOWN, buff=0.05)
 
-            element = VGroup(box, text)
-            element.shift(RIGHT * (i * (box_width + spacing)))
-            boxes.append(element)
+            cell = VGroup(cell_box, cell_text, idx_text)
+            cell.shift(RIGHT * i * (box_width + spacing))
+            cells.append(cell)
 
-        super().__init__(*boxes)
-        self.values = values.copy()
+        parts: List[VGroup] = list(cells)
+        if label and cells:
+            lbl = Text(label, font=MONO_FONT, color=YELLOW, font_size=18)
+            lbl.next_to(VGroup(*cells), UP, buff=0.15)
+            parts.append(lbl)
+
+        super().__init__(*parts)
+        self.values = list(values)
+        self.label = label
         self.box_width = box_width
         self.spacing = spacing
 
 
-class Pointer(VGroup):
-    """
-    An arrow pointer for indicating positions or iterators.
-    """
+class NodeGraph(VGroup):
+    """Dictionary as vertical [key]→[value] rows."""
 
     def __init__(
         self,
-        target_position: Tuple[float, float, float] = ORIGIN,
-        color: str = WHITE,
-        width: float = 0.3,
+        pairs: Dict[str, Any],
+        label: str = "",
+        key_width: float = 1.5,
+        val_width: float = 1.7,
+        row_height: float = 0.75,
+        row_gap: float = 0.15,
     ):
-        """
-        Initialize a Pointer.
+        rows: List[VGroup] = []
 
-        Args:
-            target_position: Initial position of the pointer.
-            color: Color of the pointer arrow.
-            width: Width of the arrow.
-        """
+        for i, (key, val) in enumerate(pairs.items()):
+            # Key cell
+            kb = RoundedRectangle(
+                corner_radius=0.08, width=key_width, height=row_height,
+                stroke_color=YELLOW, stroke_width=2,
+                fill_color=BLACK, fill_opacity=1,
+            )
+            kt = Text(str(key), font=MONO_FONT, color=YELLOW, font_size=13)
+            if kt.width > key_width - 0.1:
+                kt.scale_to_fit_width(key_width - 0.1)
+            kt.move_to(kb.get_center())
+            key_grp = VGroup(kb, kt)
+
+            # Arrow
+            arr = Arrow(
+                start=ORIGIN, end=RIGHT * 0.45,
+                color=WHITE, stroke_width=2,
+                max_tip_length_to_length_ratio=0.5, buff=0,
+            )
+
+            # Value cell
+            vb = RoundedRectangle(
+                corner_radius=0.08, width=val_width, height=row_height,
+                stroke_color=WHITE, stroke_width=2,
+                fill_color=BLACK, fill_opacity=1,
+            )
+            vt = Text(str(val), font=MONO_FONT, color=WHITE, font_size=13)
+            if vt.width > val_width - 0.1:
+                vt.scale_to_fit_width(val_width - 0.1)
+            vt.move_to(vb.get_center())
+            val_grp = VGroup(vb, vt)
+
+            arr.next_to(key_grp, RIGHT, buff=0.1)
+            val_grp.next_to(arr, RIGHT, buff=0.1)
+
+            row = VGroup(key_grp, arr, val_grp)
+            row.shift(DOWN * i * (row_height + row_gap))
+            rows.append(row)
+
+        parts: List[VGroup] = list(rows)
+        if label and rows:
+            lbl = Text(label, font=MONO_FONT, color=ORANGE, font_size=18)
+            lbl.next_to(VGroup(*rows), UP, buff=0.15)
+            parts.append(lbl)
+
+        super().__init__(*parts)
+        self.pairs = dict(pairs)
+        self.label = label
+
+
+# ---------------------------------------------------------------------------
+# Pointer & Console
+# ---------------------------------------------------------------------------
+
+class Pointer(VGroup):
+    """Downward-pointing arrow for iterator / index indicators."""
+
+    def __init__(self, color=YELLOW, height: float = 0.55):
         arrow = Arrow(
-            start=target_position + UP * 0.5,
-            end=target_position,
+            start=UP * height,
+            end=ORIGIN,
             color=color,
-            stroke_width=width,
+            stroke_width=3,
             buff=0,
+            max_tip_length_to_length_ratio=0.40,
         )
         super().__init__(arrow)
         self.arrow = arrow
-        self.current_position = target_position
+        self.pointer_color = color
 
 
 class ConsoleOutput(VGroup):
-    """
-    A fixed text area at the bottom of the screen for console output.
-    """
+    """Fixed console panel — anchored to bottom-right of frame."""
 
-    def __init__(
-        self,
-        x: float = -5,
-        y: float = -3.5,
-        width: float = 10,
-        height: float = 1.5,
-    ):
-        """
-        Initialize ConsoleOutput.
-
-        Args:
-            x: X position (left edge).
-            y: Y position (bottom edge).
-            width: Width of the console area.
-            height: Height of the console area.
-        """
-        # Create the background rectangle
-        background = Rectangle(
+    def __init__(self, width: float = 7.5, height: float = 2.0, max_lines: int = 6):
+        background = RoundedRectangle(
+            corner_radius=0.12,
             width=width,
             height=height,
-            stroke_color=WHITE,
+            stroke_color=GREEN,
             stroke_width=2,
             fill_color=BLACK,
-            fill_opacity=1,
+            fill_opacity=0.92,
         )
-        background.to_edge(DOWN, buff=0.5)
+        background.to_corner(DOWN + RIGHT, buff=0.3)
 
-        # Create the text area
-        self.output_text = Text(
-            "",
-            color=WHITE,
-            font_size=16,
-        )
-        self.output_text.next_to(background, DOWN, buff=0.1)
+        prompt = Text(">>> output", font=MONO_FONT, color=GREEN, font_size=13)
+        prompt.move_to(background.get_top() + DOWN * 0.22)
 
-        super().__init__(background, self.output_text)
+        self.output_text = Text("", font=MONO_FONT, color=WHITE, font_size=13)
+        self.output_text.move_to(background.get_center() + DOWN * 0.12)
+
+        super().__init__(background, prompt, self.output_text)
         self.background = background
         self.console_lines: List[str] = []
+        self.max_lines = max_lines
 
     def add_line(self, line: str) -> None:
-        """
-        Add a line to the console output.
-
-        Args:
-            line: Text to add.
-        """
-        self.console_lines.append(line)
-        full_text = "\n".join(self.console_lines[-5:])  # Keep last 5 lines
-        self.output_text.text = full_text
-        self.output_text.move_to(self.background.get_center())
+        self.console_lines.append(str(line))
+        visible = self.console_lines[-self.max_lines :]
+        self.output_text.text = "\n".join(visible)
+        self.output_text.move_to(self.background.get_center() + DOWN * 0.12)
 
 
-class AnimationBuilder:
-    """
-    Helper class to build complex animations.
-    """
-
-    @staticmethod
-    def highlight_animation(
-        obj: VMobject,
-        color: str = GREEN,
-        duration: float = 0.3,
-    ) -> AnimationGroup:
-        """
-        Create a highlight animation (color flash and back).
-
-        Args:
-            obj: Object to highlight.
-            color: Highlight color.
-            duration: Duration of the animation.
-
-        Returns:
-            Animation group.
-        """
-        original_color = obj.stroke_color if hasattr(obj, 'stroke_color') else WHITE
-
-        return AnimationGroup(
-            ApplyMethod(obj.set_stroke, color),
-            ApplyMethod(obj.set_stroke, original_color),
-            lag_ratio=0.5,
-        )
-
-    @staticmethod
-    def swap_animation(
-        box_a: VMobject,
-        box_b: VMobject,
-        duration: float = 0.5,
-    ) -> AnimationGroup:
-        """
-        Create a swap animation between two boxes using arc motion.
-
-        Args:
-            box_a: First box.
-            box_b: Second box.
-            duration: Duration of the swap.
-
-        Returns:
-            Animation group.
-        """
-        pos_a = box_a.get_center().copy()
-        pos_b = box_b.get_center().copy()
-
-        return AnimationGroup(
-            ApplyMethod(box_a.move_to, pos_b),
-            ApplyMethod(box_b.move_to, pos_a),
-            lag_ratio=0,
-        )
-
+# ---------------------------------------------------------------------------
+# Comparison & Condition displays
+# ---------------------------------------------------------------------------
 
 class ComparisonDisplay(VGroup):
-    """
-    A visual representation of a comparison between two values.
-    Shows: [value_left] <comparison_operator> [value_right]
-    """
+    """Shows [left] <op> [right] with an optional T/F result indicator."""
 
     def __init__(
         self,
         left_value: str,
         right_value: str,
-        operator: str = ">",
-        box_width: float = 1.2,
-        box_height: float = 0.6,
-        operator_size: float = 24,
+        operator: str = "==",
+        result: Optional[bool] = None,
+        box_width: float = 1.35,
+        box_height: float = 0.68,
     ):
-        """
-        Initialize a ComparisonDisplay.
+        result_color = GREEN if result is True else RED if result is False else YELLOW
 
-        Args:
-            left_value: Value on the left side of comparison.
-            right_value: Value on the right side of comparison.
-            operator: Comparison operator (>, <, ==, !=, >=, <=).
-            box_width: Width of each value box.
-            box_height: Height of each value box.
-            operator_size: Font size of the operator.
-        """
-        # Create left value box
-        left_box = RoundedRectangle(
-            width=box_width,
-            height=box_height,
-            stroke_color=YELLOW,
-            stroke_width=2,
-            fill_color=BLACK,
-            fill_opacity=1,
-        )
-        left_text = Text(str(left_value), color=YELLOW, font_size=18)
-        left_text.move_to(left_box.get_center())
-        left_display = VGroup(left_box, left_text)
+        def _val_box(text: str, color=YELLOW) -> VGroup:
+            b = RoundedRectangle(
+                corner_radius=0.08, width=box_width, height=box_height,
+                stroke_color=color, stroke_width=2,
+                fill_color=BLACK, fill_opacity=1,
+            )
+            t = Text(text, font=MONO_FONT, color=color, font_size=16)
+            if t.width > box_width - 0.1:
+                t.scale_to_fit_width(box_width - 0.1)
+            t.move_to(b.get_center())
+            return VGroup(b, t)
 
-        # Create operator text
-        operator_text = Text(operator, color=WHITE, font_size=operator_size)
+        left_grp = _val_box(left_value)
+        op_text  = Text(operator, font=MONO_FONT, color=WHITE, font_size=22)
+        right_grp = _val_box(right_value)
 
-        # Create right value box
-        right_box = RoundedRectangle(
-            width=box_width,
-            height=box_height,
-            stroke_color=YELLOW,
-            stroke_width=2,
-            fill_color=BLACK,
-            fill_opacity=1,
-        )
-        right_text = Text(str(right_value), color=YELLOW, font_size=18)
-        right_text.move_to(right_box.get_center())
-        right_display = VGroup(right_box, right_text)
+        left_grp.shift(LEFT * 1.7)
+        right_grp.shift(RIGHT * 1.7)
 
-        # Arrange horizontally
-        left_display.shift(LEFT * 2)
-        right_display.shift(RIGHT * 2)
+        parts = [left_grp, op_text, right_grp]
 
-        super().__init__(left_display, operator_text, right_display)
+        if result is not None:
+            circ = Circle(
+                radius=0.32,
+                stroke_color=result_color,
+                stroke_width=2.5,
+                fill_color=BLACK,
+                fill_opacity=1,
+            )
+            circ_label = Text(
+                "T" if result else "F",
+                font=MONO_FONT, color=result_color, font_size=16, weight="BOLD",
+            )
+            circ_label.move_to(circ.get_center())
+            indicator = VGroup(circ, circ_label)
+            indicator.shift(RIGHT * 3.0)
+            parts.append(indicator)
 
-        self.left_display = left_display
-        self.operator_text = operator_text
-        self.right_display = right_display
-        self.left_value = left_value
-        self.operator = operator
-        self.right_value = right_value
+        super().__init__(*parts)
+        self.left_display = left_grp
+        self.op_text = op_text
+        self.right_display = right_grp
+        self.result = result
 
 
 class ConditionDisplay(VGroup):
-    """
-    A visual representation of a condition result (TRUE or FALSE).
-    Shows a colored circle with TRUE/FALSE text inside.
-    """
+    """Large TRUE / FALSE circle — used by EVALUATE_CONDITION."""
 
     def __init__(
         self,
         result: bool,
-        radius: float = 0.8,
-        true_color: str = PURE_GREEN,
-        false_color: str = PURE_RED,
+        radius: float = 0.85,
+        true_color=PURE_GREEN,
+        false_color=PURE_RED,
     ):
-        """
-        Initialize a ConditionDisplay.
+        color = true_color if result else false_color
+        label = "TRUE" if result else "FALSE"
 
-        Args:
-            result: Boolean result of the condition (True or False).
-            radius: Radius of the result circle.
-            true_color: Color when result is True (default: GREEN).
-            false_color: Color when result is False (default: RED).
-        """
-        # Determine color and text based on result
-        display_color = true_color if result else false_color
-        result_text = "TRUE" if result else "FALSE"
-
-        # Create the result circle
         circle = Circle(
             radius=radius,
-            stroke_color=display_color,
+            stroke_color=color,
             stroke_width=3,
             fill_color=BLACK,
             fill_opacity=1,
         )
-
-        # Create result text
-        text = Text(
-            result_text,
-            color=display_color,
-            font_size=20,
-            weight="bold",
-        )
+        text = Text(label, font=MONO_FONT, color=color, font_size=20, weight="BOLD")
         text.move_to(circle.get_center())
 
         super().__init__(circle, text)
-
         self.circle = circle
         self.text = text
         self.result = result
 
 
-# PURE_RED is imported from manim; PURE_GREEN is defined at the top of this file
+# ---------------------------------------------------------------------------
+# Animation helpers
+# ---------------------------------------------------------------------------
 
+class AnimationBuilder:
+    """Static animation factories."""
+
+    @staticmethod
+    def swap_animation(
+        box_a: VMobject, box_b: VMobject, duration: float = 0.5
+    ) -> AnimationGroup:
+        """Arc-swap two boxes to each other's position."""
+        pos_a = box_a.get_center().copy()
+        pos_b = box_b.get_center().copy()
+        return AnimationGroup(
+            ApplyMethod(box_a.move_to, pos_b),
+            ApplyMethod(box_b.move_to, pos_a),
+            lag_ratio=0,
+            run_time=duration,
+        )

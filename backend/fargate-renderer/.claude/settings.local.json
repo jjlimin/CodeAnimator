@@ -7,7 +7,9 @@
       "Bash(python -c \"import sys,json; execs=json.load\\(sys.stdin\\)['executions']; [print\\(e['name'], e['status'], e['startDate']\\) for e in execs]\")",
       "Bash(python -c ' *)",
       "Bash(python -c \"import sys,json; [print\\(e['name'], e['status'], e['startDate']\\) for e in json.load\\(sys.stdin\\)['executions']]\")",
-      "PowerShell(aws logs get-log-events *)"
+      "PowerShell(aws logs get-log-events *)",
+      "Bash(aws logs *)",
+      "PowerShell(Get-Content *)"
     ]
   }
 }

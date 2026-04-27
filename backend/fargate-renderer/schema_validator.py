@@ -1,16 +1,24 @@
 """
 JSON Schema Validator for Storyboard
 
-This module validates the incoming JSON storyboard against the defined schema
-to ensure all required fields and structure are correct before animation.
+Validates the incoming storyboard JSON before animation starts.
 """
 
 import json
 from jsonschema import validate, ValidationError
 from typing import Dict, Any
 
+# Scalar-or-array shorthand reused in several places
+_SCALAR_OR_ARRAY = {
+    "oneOf": [
+        {"type": "string"},
+        {"type": "number"},
+        {"type": "boolean"},
+        {"type": "array", "items": {"type": ["string", "number", "boolean"]}},
+        {"type": "object"},   # dict → NodeGraph
+    ]
+}
 
-# Define the complete storyboard schema
 STORYBOARD_SCHEMA = {
     "type": "object",
     "required": ["metadata", "script"],
@@ -28,10 +36,10 @@ STORYBOARD_SCHEMA = {
                 "type": "object",
                 "required": ["step_id", "line_number", "code_snippet", "narration", "visual_commands"],
                 "properties": {
-                    "step_id": {"type": "integer"},
-                    "line_number": {"type": "integer"},
+                    "step_id":      {"type": "integer"},
+                    "line_number":  {"type": "integer"},
                     "code_snippet": {"type": "string"},
-                    "narration": {"type": "string"},
+                    "narration":    {"type": "string"},
                     "visual_commands": {
                         "type": "array",
                         "items": {
@@ -41,51 +49,59 @@ STORYBOARD_SCHEMA = {
                                 "command": {
                                     "type": "string",
                                     "enum": [
+                                        # Memory
                                         "CREATE_VARIABLE",
                                         "CREATE_COLLECTION",
+                                        "LINK_TARGET",
+                                        "DESTROY_OBJECT",
+                                        # State
                                         "UPDATE_VALUE",
-                                        "HIGHLIGHT",
-                                        "PRINT_TO_CONSOLE",
+                                        "ANIMATE_MATH",
+                                        "TYPE_CAST",
+                                        # Collection
                                         "SWAP",
                                         "APPEND_ELEMENT",
+                                        "INSERT_AT",
+                                        "POP_ELEMENT",
+                                        # Flow / emphasis
                                         "MOVE_POINTER",
-                                        "DESTROY_OBJECT"
+                                        "COMPARE_VALUES",
+                                        "HIGHLIGHT",
+                                        "PRINT_TO_CONSOLE",
+                                        # Legacy
+                                        "EVALUATE_CONDITION",
                                     ]
                                 },
-                                "id": {"type": "string"},
-                                "target_id": {"type": "string"},
-                                "type": {"type": "string"},
-                                "label": {"type": "string"},
-                                "initial_value": {
-                                    "oneOf": [
-                                        {"type": "string"},
-                                        {"type": "number"},
-                                        {"type": "boolean"},
-                                        {"type": "array", "items": {"type": ["string", "number", "boolean"]}}
-                                    ]
-                                },
-                                "value": {
-                                    "oneOf": [
-                                        {"type": "string"},
-                                        {"type": "number"},
-                                        {"type": "boolean"},
-                                        {"type": "array", "items": {"type": ["string", "number", "boolean"]}}
-                                    ]
-                                },
-                                "color": {"type": "string"},
+                                # Object identity
+                                "id":          {"type": "string"},
+                                "target_id":   {"type": "string"},
+                                "source_id":   {"type": "string"},
+                                "pointer_id":  {"type": "string"},
+                                "condition_id":{"type": "string"},
+                                "result_id":   {"type": "string"},
+                                # Variable creation
+                                "label":         {"type": "string"},
+                                "type":          {"type": "string"},
+                                "initial_value": _SCALAR_OR_ARRAY,
+                                # Value mutation
+                                "value":         _SCALAR_OR_ARRAY,
+                                "new_type":      {"type": "string"},
+                                # Math animation
+                                "expression":    {"type": "string"},
+                                "result":        {"type": ["string", "number", "boolean"]},
+                                # Collection operations (integer OR variable expression, e.g. "j+1")
+                                "index":   {"type": ["integer", "string"]},
+                                "index_a": {"type": ["integer", "string"]},
+                                "index_b": {"type": ["integer", "string"]},
+                                "element": _SCALAR_OR_ARRAY,
+                                # Comparison
+                                "operator": {"type": "string"},
+                                "left":  {"type": ["string", "number", "boolean"]},
+                                "right": {"type": ["string", "number", "boolean"]},
+                                # Styling / misc
+                                "color":    {"type": "string"},
                                 "position": {"type": "string"},
-                                "index_a": {"type": "integer"},
-                                "index_b": {"type": "integer"},
-                                "element": {
-                                    "oneOf": [
-                                        {"type": "string"},
-                                        {"type": "number"},
-                                        {"type": "boolean"},
-                                        {"type": "array", "items": {"type": ["string", "number", "boolean"]}}
-                                    ]
-                                },
-                                "pointer_id": {"type": "string"},
-                                "duration": {"type": "number"}
+                                "duration": {"type": "number"},
                             }
                         }
                     }
@@ -97,22 +113,10 @@ STORYBOARD_SCHEMA = {
 
 
 class SchemaValidator:
-    """Validator for storyboard JSON against the defined schema."""
+    """Validates storyboard JSON against STORYBOARD_SCHEMA."""
 
     @staticmethod
     def validate_storyboard(storyboard: Dict[str, Any]) -> bool:
-        """
-        Validate the storyboard JSON against the schema.
-
-        Args:
-            storyboard: The storyboard dictionary to validate.
-
-        Returns:
-            True if valid.
-
-        Raises:
-            ValidationError: If the storyboard does not conform to the schema.
-        """
         try:
             validate(instance=storyboard, schema=STORYBOARD_SCHEMA)
             return True
@@ -121,28 +125,15 @@ class SchemaValidator:
 
     @staticmethod
     def load_and_validate_json(filepath: str) -> Dict[str, Any]:
-        """
-        Load a JSON file and validate it against the schema.
-
-        Args:
-            filepath: Path to the JSON file.
-
-        Returns:
-            The validated storyboard dictionary.
-
-        Raises:
-            FileNotFoundError: If the file does not exist.
-            json.JSONDecodeError: If the file is not valid JSON.
-            ValidationError: If the storyboard does not conform to the schema.
-        """
         try:
-            with open(filepath, 'r', encoding='utf-8') as f:
+            with open(filepath, "r", encoding="utf-8") as f:
                 storyboard = json.load(f)
         except FileNotFoundError:
             raise FileNotFoundError(f"Storyboard file not found: {filepath}")
         except json.JSONDecodeError as e:
-            raise json.JSONDecodeError(f"Invalid JSON in file {filepath}: {e.msg}", e.doc, e.pos) from e
+            raise json.JSONDecodeError(
+                f"Invalid JSON in {filepath}: {e.msg}", e.doc, e.pos
+            ) from e
 
         SchemaValidator.validate_storyboard(storyboard)
         return storyboard
-
