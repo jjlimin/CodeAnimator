@@ -2,6 +2,7 @@ import json
 import boto3
 import os
 import logging
+import time
 from datetime import datetime
 from openai import OpenAI
 
@@ -138,7 +139,10 @@ Desired JSON Output:
         user_content = f"{base_instructions}\n\nINPUT AST STRUCTURE:\n{json.dumps(ast_content)}"
 
         # 5. Call OpenAI API via SDK
+
+        start_time = time.time()
         logger.info(f"[request_id:{request_id}] Sending prompt to OpenAI API")
+
         completion = openai_client.chat.completions.create(
             model="gpt-5-nano",
             messages=[
@@ -146,6 +150,18 @@ Desired JSON Output:
                 {"role": "user", "content": user_content}
             ],
             temperature=1
+        )
+
+        end_time = time.time()
+        duration = end_time - start_time
+        usage = completion.usage
+        prompt_tokens = usage.prompt_tokens
+        completion_tokens = usage.completion_tokens
+        total_tokens = usage.total_tokens
+
+        logger.info(
+            f"[{request_id}] OpenAI response received in {duration:.2f} seconds. "
+            f"Tokens used: {prompt_tokens} (prompt) + {completion_tokens} (completion) = {total_tokens} (total)"
         )
 
         script_text = completion.choices[0].message.content
