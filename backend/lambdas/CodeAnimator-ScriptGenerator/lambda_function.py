@@ -1,8 +1,13 @@
 import json
 import boto3
 import os
+import logging
 from datetime import datetime
 from openai import OpenAI
+
+# initialize logger
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 # Initialize clients
 s3 = boto3.client('s3')
@@ -12,11 +17,15 @@ openai_client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
 
 def lambda_handler(event, context):
     # 1. Configuration and Input
+    request_id = context.aws_request_id
     user_id = event.get('user_id') or event.get('UserID')
     job_id = event.get('job_id') or event.get('ProjectID')
     bucket_name = 'code-animator-assets'
 
+    logger.info(f"[request_id:{request_id}] Starting Script Generator Lambda for UserID: {user_id}, ProjectID: {job_id}")
+
     if not user_id or not job_id:
+        logger.warning(f"[request_id:{request_id}] No UserID or ProjectID in event")
         return {'statusCode': 400, 'body': 'Missing UserID or ProjectID'}
 
     # Dynamically build the S3 key
@@ -24,6 +33,7 @@ def lambda_handler(event, context):
 
     try:
         # 2. Update status in DynamoDB
+        logger.info(f"[request_id:{request_id}] Updating DynamoDB status to 'GeneratingContent'")
         table.update_item(
             Key={'UserID': user_id, 'ProjectID': f'PROJ#{job_id}'},
             UpdateExpression="set #s = :status_val",
@@ -37,7 +47,7 @@ def lambda_handler(event, context):
             print("Using AST data directly from event.")
             ast_content = event['ast_data']
         else:
-            print(f"Fetching AST from S3: {ast_s3_key}")
+            logger.info(f"[request_id:{request_id}] Fetching AST from S3: {bucket_name}/{ast_s3_key}")
             response = s3.get_object(Bucket=bucket_name, Key=ast_s3_key)
             full_json = json.loads(response['Body'].read().decode('utf-8'))
             ast_content = full_json.get('ast_data', full_json)
@@ -128,6 +138,7 @@ Desired JSON Output:
         user_content = f"{base_instructions}\n\nINPUT AST STRUCTURE:\n{json.dumps(ast_content)}"
 
         # 5. Call OpenAI API via SDK
+        logger.info(f"[request_id:{request_id}] Sending prompt to OpenAI API")
         completion = openai_client.chat.completions.create(
             model="gpt-5-nano",
             messages=[
@@ -147,6 +158,7 @@ Desired JSON Output:
         except Exception:
             final_script_json = script_text
 
+        logger.info(f"[request_id:{request_id}] Sending script to S3: {bucket_name}/{script_s3_key}")
         s3.put_object(
             Bucket=bucket_name,
             Key=script_s3_key,
@@ -160,6 +172,7 @@ Desired JSON Output:
         )
 
         # 7. Final Return
+        logger.info(f"[request_id:{request_id}] Successfully generated script for UserID: {user_id} and ProjectID: {job_id}")
         return {
             'statusCode': 200,
             'UserID': user_id,
@@ -169,7 +182,7 @@ Desired JSON Output:
         }
 
     except Exception as e:
-        print(f"Error in Content Generator: {str(e)}")
+        logger.error(f"[request_id:{request_id}] Error in Content Generator: {str(e)}")
         try:
             table.update_item(
                 Key={'UserID': user_id, 'ProjectID': f'PROJ#{job_id}'},
