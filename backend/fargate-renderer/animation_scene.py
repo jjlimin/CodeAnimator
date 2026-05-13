@@ -2,13 +2,10 @@
 AnimationScene - The Main Orchestrator
 
 Reads the storyboard, maintains the ObjectRegistry, and executes each visual
-command as a timed Manim animation synchronized to OpenAI TTS audio.
-
-Timing contract per step:
-  CAPTION_IN  = 0.2 s  (fast FadeIn so it doesn't eat audio budget)
-  CAPTION_OUT = 0.3 s
-  per_cmd_time = (audio_duration - CAPTION_IN - CAPTION_OUT) / n_cmds
-  Each cmd_* method receives run_time and applies it to its primary play() call.
+command as a timed Manim animation. When an audio_map_path is provided (from
+the VoiceoverGenerator Lambda), timing locks to actual audio duration and
+add_sound() syncs the MP3 to the animation. Falls back to narration-length
+timing when no audio is present.
 """
 
 import json
@@ -159,7 +156,7 @@ class AnimationScene(Scene):
                 print(f"  Error in command {cmd.get('command')}: {e}")
                 raise
 
-        # Wait for audio tail
+        # Wait for audio tail before fading caption
         if audio_duration is not None:
             elapsed = _CAPTION_IN + per_cmd * n_cmds
             tail = max(0.05, audio_duration - elapsed - _CAPTION_OUT)
