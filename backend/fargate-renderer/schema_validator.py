@@ -8,13 +8,16 @@ import json
 from jsonschema import validate, ValidationError
 from typing import Dict, Any
 
-# Scalar-or-array shorthand reused in several places
+# Scalar-or-array shorthand reused in several places.
+# null is allowed so LLM-generated nulls don't crash schema validation;
+# the renderer treats null as a sensible default (0 / "" / []).
 _SCALAR_OR_ARRAY = {
     "oneOf": [
         {"type": "string"},
         {"type": "number"},
         {"type": "boolean"},
-        {"type": "array", "items": {"type": ["string", "number", "boolean"]}},
+        {"type": "null"},
+        {"type": "array", "items": {"type": ["string", "number", "boolean", "null"]}},
         {"type": "object"},   # dict → NodeGraph
     ]
 }
@@ -36,10 +39,13 @@ STORYBOARD_SCHEMA = {
                 "type": "object",
                 "required": ["step_id", "line_number", "code_snippet", "narration", "visual_commands"],
                 "properties": {
-                    "step_id":      {"type": "integer"},
-                    "line_number":  {"type": "integer"},
-                    "code_snippet": {"type": "string"},
-                    "narration":    {"type": "string"},
+                    "step_id":         {"type": "integer"},
+                    "line_number":     {"type": "integer"},
+                    "code_snippet":    {"type": "string"},
+                    "narration":       {"type": "string"},
+                    "fast_forward":    {"type": "boolean"},
+                    "iteration_group": {"type": "string"},
+                    "step_title":      {"type": "string"},
                     "visual_commands": {
                         "type": "array",
                         "items": {
@@ -68,6 +74,9 @@ STORYBOARD_SCHEMA = {
                                         "COMPARE_VALUES",
                                         "HIGHLIGHT",
                                         "PRINT_TO_CONSOLE",
+                                        # Algorithm visualization
+                                        "MARK_ELEMENT",
+                                        "CELEBRATE",
                                         # Legacy
                                         "EVALUATE_CONDITION",
                                     ]
@@ -102,6 +111,9 @@ STORYBOARD_SCHEMA = {
                                 "color":    {"type": "string"},
                                 "position": {"type": "string"},
                                 "duration": {"type": "number"},
+                                # Algorithm visualization
+                                "role":  {"type": "string"},
+                                "style": {"type": "string"},
                             }
                         }
                     }

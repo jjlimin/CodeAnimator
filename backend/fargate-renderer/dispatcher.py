@@ -163,6 +163,9 @@ class Dispatcher:
             "COMPARE_VALUES",
             "HIGHLIGHT",
             "PRINT_TO_CONSOLE",
+            # Algorithm visualization
+            "MARK_ELEMENT",
+            "CELEBRATE",
             # Legacy
             "EVALUATE_CONDITION",
         ]
