@@ -2,13 +2,10 @@
 AnimationScene - The Main Orchestrator
 
 Reads the storyboard, maintains the ObjectRegistry, and executes each visual
-command as a timed Manim animation synchronized to OpenAI TTS audio.
-
-Timing contract per step:
-  CAPTION_IN  = 0.2 s  (fast FadeIn so it doesn't eat audio budget)
-  CAPTION_OUT = 0.3 s
-  per_cmd_time = (audio_duration - CAPTION_IN - CAPTION_OUT) / n_cmds
-  Each cmd_* method receives run_time and applies it to its primary play() call.
+command as a timed Manim animation. When an audio_map_path is provided (from
+the VoiceoverGenerator Lambda), timing locks to actual audio duration and
+add_sound() syncs the MP3 to the animation. Falls back to narration-length
+timing when no audio is present.
 """
 
 import json
@@ -19,27 +16,70 @@ from typing import Dict, Any, List, Optional
 from manim import (
     Scene, Text, FadeIn, FadeOut, Transform, ReplacementTransform,
     Wait, ApplyMethod, Arrow,
-    WHITE, BLACK, GREEN, RED, BLUE, YELLOW, ORANGE,
+    WHITE, BLACK, GREEN, RED, BLUE, YELLOW, ORANGE, ManimColor,
     UP, DOWN, LEFT, RIGHT, ORIGIN, config,
+    Indicate, Flash, Circumscribe,
 )
 
 from dispatcher import Dispatcher
 from object_registry import ObjectRegistry
 from renderer import (
-    MONO_FONT,
+    MONO_FONT, JOYFUL,
     ValueBox, StringBox, BooleanBox,
     BoxSeries, NodeGraph, Pointer,
     ConsoleOutput, AnimationBuilder,
     ComparisonDisplay, ConditionDisplay,
+    HeaderBar, SidePanelDivider, auto_box_width,
 )
 
 # Timing constants (seconds)
 _CAPTION_IN  = 0.2
 _CAPTION_OUT = 0.3
 _MIN_CMD_TIME = 0.25   # floor so very fast steps never feel broken
+_FF_CMD_TIME  = 0.15   # fast-forward step timing
+_AUDIO_PAD    = 0.35   # extra silence between audio clips to prevent overlap
 
-# Narration caption safe width (characters before wrapping)
-_WRAP_WIDTH = 85
+# Narration caption safe wrap width (characters)
+_WRAP_WIDTH = 70
+
+# ---- Full-Frame 16:9 Layout (Manim coords: X ±7.1, Y ±4.0) ----
+
+# Header bar (top strip, y = 3.3 to 4.0)
+_HEADER_Y       =  3.65   # center y of header text
+
+# Primary Stage — left ~65% of screen (x = -7.1 to +2.2)
+_PRIMARY_CX     = -2.45   # center x
+_PRIMARY_WIDTH  =  9.30   # usable width
+
+# Side Panel — right ~35% (x = +2.4 to +7.1)
+_DIVIDER_X      =  2.30   # vertical divider x
+_SIDE_CX        =  4.75   # center x
+
+# Shared vertical range for both panels (below header, above narration)
+_PANEL_Y_MAX    =  3.22
+_PANEL_Y_MIN    = -2.10
+
+# Collections in Primary Stage
+_VISUAL_Y_START  =  1.50
+_VISUAL_Y_STEP   = -2.30
+
+# Variables in Side Panel
+_VAR_SIDE_Y_START =  2.50
+_VAR_SIDE_Y_STEP  = -1.25
+
+# Comparison display — fixed anchor inside primary stage
+_CMP_ZONE = [-1.0, -1.10, 0]
+
+# Narration footer (within primary stage x-range)
+_NARRATION_CX   = _PRIMARY_CX   # -2.45
+_NARRATION_Y    = -3.20
+_NARRATION_MAX_W =  8.50
+
+# Console inside side panel (lower portion)
+_CONSOLE_CX     =  4.75
+_CONSOLE_CY     = -3.00
+_CONSOLE_W      =  4.40
+_CONSOLE_H      =  1.80
 
 
 def _wrap_narration(text: str) -> str:
@@ -93,14 +133,49 @@ class AnimationScene(Scene):
                 print(f"Warning: could not load audio map: {e}")
 
         self.registry = ObjectRegistry()
-        self.console = ConsoleOutput()
-        self.add(self.console)
 
-        # Auto-layout grid state
-        self._layout_count = 0
+        # ---- Console visibility detection ----
+        meta_flag = self.dispatcher.metadata.get("has_console_output")
+        if meta_flag is not None:
+            self._has_console = bool(meta_flag)
+        else:
+            all_commands = [
+                cmd
+                for step in self.dispatcher.get_all_steps()
+                for cmd in step.get("visual_commands", [])
+            ]
+            self._has_console = any(c.get("command") == "PRINT_TO_CONSOLE" for c in all_commands)
+
+        # ---- Static chrome: header bar + side panel divider ----
+        algo_name    = self.dispatcher.metadata.get("algorithm_type", "").replace("_", " ").title()
+        self._algo_display_name = algo_name or self.dispatcher.project_name
+
+        self._header = HeaderBar(self._algo_display_name)
+        self.add(self._header)
+
+        self.add(SidePanelDivider(_DIVIDER_X, _PANEL_Y_MAX, _PANEL_Y_MIN))
+
+        # ---- Console (side panel, lower portion) ----
+        self.console = ConsoleOutput(width=_CONSOLE_W, height=_CONSOLE_H, max_lines=5)
+        self.console.move_to([_CONSOLE_CX, _CONSOLE_CY, 0])
+        if self._has_console:
+            self.add(self.console)
+        else:
+            print("Console hidden — no output detected.")
+
+        # ---- Layout counters ----
+        self._var_count    = 0   # side panel variables
+        self._visual_count = 0   # primary stage collections
+
+        # Fallback generic grid (for misc objects)
+        self._layout_count   = 0
         self._objects_per_row = 3
         self._row_height = 2.6
         self._col_width  = 2.8
+
+        # One-in-one-out tracker for comparison displays
+        self._active_comparison: Optional[Any] = None
+        self._active_comparison_id: Optional[str] = None
 
         self.current_caption: Optional[Any] = None
 
@@ -120,11 +195,38 @@ class AnimationScene(Scene):
     # ------------------------------------------------------------------
 
     def execute_step(self, step: Dict[str, Any]) -> None:
-        step_id   = step.get("step_id")
-        narration = step.get("narration", "")
-        commands  = step.get("visual_commands", [])
+        step_id      = step.get("step_id")
+        narration    = step.get("narration", "")
+        commands     = step.get("visual_commands", [])
+        fast_forward = step.get("fast_forward", False)
+        step_title   = step.get("step_title", "")
 
-        print(f"\n--- Step {step_id} ---")
+        self._current_step_id = step_id
+        print(f"\n--- Step {step_id}{' [FF]' if fast_forward else ''} ---")
+
+        # Update header bar title (instant swap, no animation cost)
+        if step_title:
+            full = f"{self._algo_display_name}  —  {step_title}"
+            new_title = Text(full, font=MONO_FONT, color=ManimColor("#7FAACC"), font_size=17)
+            new_title.move_to(self._header.bg.get_center())
+            if new_title.width > config.frame_width - 0.8:
+                new_title.scale_to_fit_width(config.frame_width - 0.8)
+            self.remove(self._header.title_obj)
+            self._header.title_obj = new_title
+            self.add(self._header.title_obj)
+
+        # Fast-forward: skip caption, use tight timing, no tail wait
+        if fast_forward:
+            if self.current_caption is not None:
+                self.remove(self.current_caption)
+                self.current_caption = None
+            for cmd in commands:
+                try:
+                    self.execute_command(cmd, run_time=_FF_CMD_TIME)
+                except Exception as e:
+                    print(f"  Error in command {cmd.get('command')}: {e}")
+            self.wait(0.05)
+            return
 
         # Clean up previous caption
         if self.current_caption is not None:
@@ -144,7 +246,8 @@ class AnimationScene(Scene):
         self.current_caption = self._display_caption(narration)
 
         # Per-command time budget
-        n_cmds = max(1, len(commands))
+        actual_cmd_count = len(commands)
+        n_cmds = max(1, actual_cmd_count)  # floor=1 for per_cmd division only
         if audio_duration is not None:
             budget = max(0.0, audio_duration - _CAPTION_IN - _CAPTION_OUT)
             per_cmd = max(_MIN_CMD_TIME, budget / n_cmds)
@@ -159,10 +262,12 @@ class AnimationScene(Scene):
                 print(f"  Error in command {cmd.get('command')}: {e}")
                 raise
 
-        # Wait for audio tail
+        # Wait for audio tail before fading caption.
+        # Use actual_cmd_count (not n_cmds) so 0-command steps (overview, milestone)
+        # don't under-estimate elapsed time and cut the tail short.
         if audio_duration is not None:
-            elapsed = _CAPTION_IN + per_cmd * n_cmds
-            tail = max(0.05, audio_duration - elapsed - _CAPTION_OUT)
+            elapsed = _CAPTION_IN + per_cmd * actual_cmd_count
+            tail = max(0.10, audio_duration - elapsed - _CAPTION_OUT + _AUDIO_PAD)
             self.wait(tail)
         else:
             self.wait(0.4)
@@ -182,14 +287,13 @@ class AnimationScene(Scene):
             wrapped,
             font=MONO_FONT,
             color=WHITE,
-            font_size=19,
+            font_size=18,
             line_spacing=1.25,
         )
-        # Hard-clamp to safe zone (above console panel)
-        max_w = config.frame_width - 1.0
-        if caption.width > max_w:
-            caption.scale_to_fit_width(max_w)
-        caption.to_edge(DOWN, buff=2.6)  # sits above the console panel
+        # Clamp width to primary stage (avoids overlapping side panel)
+        if caption.width > _NARRATION_MAX_W:
+            caption.scale_to_fit_width(_NARRATION_MAX_W)
+        caption.move_to([_NARRATION_CX, _NARRATION_Y, 0])
         self.add(caption)
         self.play(FadeIn(caption, run_time=_CAPTION_IN))
         return caption
@@ -220,12 +324,17 @@ class AnimationScene(Scene):
             "COMPARE_VALUES":     self.cmd_compare_values,
             "HIGHLIGHT":          self.cmd_highlight,
             "PRINT_TO_CONSOLE":   self.cmd_print_to_console,
+            # Algorithm visualization
+            "MARK_ELEMENT":       self.cmd_mark_element,
+            "CELEBRATE":          self.cmd_celebrate,
             # Legacy
             "EVALUATE_CONDITION": self.cmd_evaluate_condition,
         }
         handler = dispatch.get(cmd_type)
         if handler is None:
-            raise ValueError(f"Unknown command: {cmd_type}")
+            step_id = getattr(self, "_current_step_id", "?")
+            print(f"  WARNING: Unknown command '{cmd_type}' in step {step_id} — skipping. Full command: {command}")
+            return
         handler(command, run_time=run_time)
 
     # ------------------------------------------------------------------
@@ -238,8 +347,11 @@ class AnimationScene(Scene):
         value   = command.get("initial_value")
         var_type = command.get("type", "auto")
 
-        if not obj_id or value is None:
-            raise ValueError("CREATE_VARIABLE requires: id, initial_value")
+        if not obj_id:
+            raise ValueError("CREATE_VARIABLE requires: id")
+        # Treat LLM-generated null as a sensible default so render doesn't crash
+        if value is None:
+            value = "" if var_type == "str" else 0
 
         # Choose the right box type
         if var_type == "str" or (var_type == "auto" and isinstance(value, str)):
@@ -249,14 +361,16 @@ class AnimationScene(Scene):
         else:
             box = ValueBox(label=label, value=str(value), var_type=var_type)
 
-        box.move_to(self._next_position())
+        box.move_to(self._next_var_position())
         self.play(FadeIn(box, run_time=run_time))
         self.registry.register(obj_id, box)
         print(f"  CREATE_VARIABLE {obj_id} = {value!r}")
 
     def cmd_create_collection(self, command: Dict[str, Any], run_time: float = 1.0) -> None:
         obj_id  = command.get("id")
-        values  = command.get("initial_value") or command.get("initial_elements", [])
+        values  = command.get("initial_value")
+        if values is None:
+            values = command.get("initial_elements", [])
         label   = command.get("label", "")
 
         if not obj_id:
@@ -274,9 +388,10 @@ class AnimationScene(Scene):
         else:
             if not isinstance(values, list):
                 values = [values]
-            visual = BoxSeries(values=[str(v) for v in values], label=label)
+            bw = auto_box_width(len(values), available_width=_PRIMARY_WIDTH - 0.80)
+            visual = BoxSeries(values=[str(v) for v in values], label=label, box_width=bw)
 
-        visual.move_to(self._next_position())
+        visual.move_to(self._next_visual_position())
         self.play(FadeIn(visual, run_time=run_time))
         self.registry.register(obj_id, visual)
         print(f"  CREATE_COLLECTION {obj_id}")
@@ -323,8 +438,10 @@ class AnimationScene(Scene):
         target_id = command.get("target_id")
         new_value = command.get("value") if command.get("value") is not None else command.get("new_value")
 
-        if not target_id or new_value is None:
-            raise ValueError("UPDATE_VALUE requires: target_id, value (or new_value)")
+        if not target_id:
+            raise ValueError("UPDATE_VALUE requires: target_id")
+        if new_value is None:
+            new_value = 0  # treat LLM null as numeric zero
 
         old_obj = self.registry.get(target_id)
         new_obj = self._rebuild_box(old_obj, value=str(new_value))
@@ -409,7 +526,18 @@ class AnimationScene(Scene):
 
         new_values = obj.values.copy()
         new_values[index_a], new_values[index_b] = new_values[index_b], new_values[index_a]
-        new_series = BoxSeries(values=new_values, label=obj.label)
+        # Carry cell_states: roles follow values across the swap
+        old_states = getattr(obj, "cell_states", {})
+        new_states: Dict[int, str] = {}
+        for idx, role in old_states.items():
+            if idx == index_a:
+                new_states[index_b] = role
+            elif idx == index_b:
+                new_states[index_a] = role
+            else:
+                new_states[idx] = role
+        new_series = BoxSeries(values=new_values, label=obj.label,
+                               box_width=obj.box_width, cell_states=new_states)
         new_series.move_to(obj.get_center())
         self.play(ReplacementTransform(obj, new_series, run_time=run_time))
         self.registry.update(target_id, new_series)
@@ -426,8 +554,11 @@ class AnimationScene(Scene):
         if not isinstance(obj, BoxSeries):
             raise ValueError(f"{target_id} is not a BoxSeries")
 
+        if element is None:
+            element = ""
         new_values = obj.values + [str(element)]
-        new_series = BoxSeries(values=new_values, label=obj.label)
+        bw = auto_box_width(len(new_values), _PRIMARY_WIDTH - 0.80)
+        new_series = BoxSeries(values=new_values, label=obj.label, box_width=bw)
         new_series.move_to(obj.get_center())
         self.play(ReplacementTransform(obj, new_series, run_time=run_time))
         self.registry.update(target_id, new_series)
@@ -447,7 +578,8 @@ class AnimationScene(Scene):
 
         new_values = obj.values.copy()
         new_values.insert(index, str(element))
-        new_series = BoxSeries(values=new_values, label=obj.label)
+        bw = auto_box_width(len(new_values), _PRIMARY_WIDTH - 0.80)
+        new_series = BoxSeries(values=new_values, label=obj.label, box_width=bw)
         new_series.move_to(obj.get_center())
         self.play(ReplacementTransform(obj, new_series, run_time=run_time))
         self.registry.update(target_id, new_series)
@@ -470,7 +602,8 @@ class AnimationScene(Scene):
         popped = new_values.pop(index)
 
         if new_values:
-            new_series = BoxSeries(values=new_values, label=obj.label)
+            bw = auto_box_width(len(new_values), _PRIMARY_WIDTH - 0.80)
+            new_series = BoxSeries(values=new_values, label=obj.label, box_width=bw)
             new_series.move_to(obj.get_center())
             self.play(ReplacementTransform(obj, new_series, run_time=run_time))
             self.registry.update(target_id, new_series)
@@ -524,7 +657,7 @@ class AnimationScene(Scene):
         print(f"  MOVE_POINTER {pointer_id} → {target_id}" + (f"[{index}]" if index is not None else ""))
 
     def cmd_compare_values(self, command: Dict[str, Any], run_time: float = 1.0) -> None:
-        """Show a comparison display, then flash Green (True) or Red (False)."""
+        """Show a comparison display at a fixed anchor — one-in, one-out."""
         left_val  = command.get("left")
         right_val = command.get("right")
         operator  = command.get("operator", "==")
@@ -533,7 +666,18 @@ class AnimationScene(Scene):
         if left_val is None or right_val is None:
             raise ValueError("COMPARE_VALUES requires: left, right")
 
-        result = _eval_comparison(left_val, operator, right_val)
+        # ── One-in, one-out: remove the previous comparison immediately ──
+        if self._active_comparison is not None:
+            if run_time <= _FF_CMD_TIME:
+                self.remove(self._active_comparison)
+            else:
+                self.play(FadeOut(self._active_comparison, run_time=0.12))
+            if self._active_comparison_id and self.registry.has(self._active_comparison_id):
+                self.registry.destroy(self._active_comparison_id)
+            self._active_comparison = None
+            self._active_comparison_id = None
+
+        result      = _eval_comparison(left_val, operator, right_val)
         flash_color = GREEN if result else RED
 
         display = ComparisonDisplay(
@@ -542,12 +686,15 @@ class AnimationScene(Scene):
             operator=operator,
             result=result,
         )
-        display.move_to(self._next_position())
+        # Fixed anchor — never drifts, never stacks
+        display.move_to(_CMP_ZONE)
 
-        # FadeIn then color-flash the result
         self.play(FadeIn(display, run_time=run_time * 0.55))
         self.play(ApplyMethod(display.set_stroke, flash_color, 5), run_time=run_time * 0.25)
         self.play(ApplyMethod(display.set_stroke, WHITE, 2),        run_time=run_time * 0.20)
+
+        self._active_comparison    = display
+        self._active_comparison_id = result_id
 
         if result_id:
             self.registry.register(result_id, display)
@@ -618,8 +765,84 @@ class AnimationScene(Scene):
         print(f"  EVALUATE_CONDITION {condition_id} = {result}")
 
     # ------------------------------------------------------------------
+    # Algorithm visualization commands
+    # ------------------------------------------------------------------
+
+    def cmd_mark_element(self, command: Dict[str, Any], run_time: float = 1.0) -> None:
+        """Recolor a specific BoxSeries cell to reflect its algorithmic role."""
+        target_id = command.get("target_id")
+        index     = command.get("index")
+        role      = command.get("role", "default")
+
+        if not target_id or index is None:
+            raise ValueError("MARK_ELEMENT requires: target_id, index")
+
+        obj = self.registry.get(target_id)
+        if not isinstance(obj, BoxSeries):
+            raise ValueError(f"{target_id} is not a BoxSeries")
+
+        new_states = dict(getattr(obj, "cell_states", {}))
+        new_states[int(index)] = role
+
+        new_series = BoxSeries(
+            values=obj.values, label=obj.label,
+            box_width=obj.box_width, cell_states=new_states
+        )
+        new_series.move_to(obj.get_center())
+        self.play(ReplacementTransform(obj, new_series, run_time=run_time))
+        self.registry.update(target_id, new_series)
+        print(f"  MARK_ELEMENT {target_id}[{index}] = {role}")
+
+    def cmd_celebrate(self, command: Dict[str, Any], run_time: float = 1.0) -> None:
+        """Play a joyful effect on a target element (milestone reached)."""
+        target_id = command.get("target_id")
+        index     = command.get("index")
+        style     = command.get("style", "flash").lower()
+
+        if not target_id:
+            raise ValueError("CELEBRATE requires: target_id")
+
+        obj = self.registry.get(target_id)
+
+        # Resolve the target mobject — specific cell if index given
+        mob = obj
+        if isinstance(obj, BoxSeries) and index is not None:
+            idx = self._resolve_index(index)
+            if 0 <= idx < len(obj.cells):
+                mob = obj.cells[idx]
+
+        success_color = JOYFUL["success"]
+
+        if style == "indicate":
+            self.play(Indicate(mob, color=success_color, scale_factor=1.35, run_time=run_time))
+        elif style == "circumscribe":
+            self.play(Circumscribe(mob, color=success_color, run_time=run_time))
+        else:
+            self.play(Flash(mob, color=success_color, line_length=0.25, run_time=run_time))
+
+        print(f"  CELEBRATE {target_id}" + (f"[{index}]" if index is not None else "") + f" ({style})")
+
+    # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _next_var_position(self):
+        """Side Panel: stack variables top-to-bottom, overflow to second column."""
+        n   = self._var_count
+        col = n // 4
+        row = n % 4
+        self._var_count += 1
+        x = _SIDE_CX - col * 1.35
+        y = _VAR_SIDE_Y_START + row * _VAR_SIDE_Y_STEP
+        return [x, y, 0]
+
+    def _next_visual_position(self):
+        """Primary Stage: center collections vertically."""
+        n = self._visual_count
+        self._visual_count += 1
+        x = _PRIMARY_CX
+        y = _VISUAL_Y_START + n * _VISUAL_Y_STEP
+        return [x, y, 0]
 
     def _next_position(self):
         """Auto-grid: place each new object in the next available cell."""

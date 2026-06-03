@@ -10,7 +10,7 @@ from manim import (
     VGroup, Rectangle, RoundedRectangle, Text, Arrow, Line, Circle,
     FadeIn, FadeOut, Transform, AnimationGroup, ApplyMethod,
     UP, DOWN, LEFT, RIGHT, ORIGIN, WHITE, BLACK, GREEN, RED,
-    YELLOW, BLUE, ORANGE, PURE_RED,
+    YELLOW, BLUE, ORANGE, PURE_RED, ManimColor,
     VMobject,
 )
 
@@ -28,6 +28,28 @@ TYPE_COLORS: Dict[str, Any] = {
     "str":   BLUE,
     "bool":  GREEN,
     "auto":  WHITE,
+}
+
+# Joyful / Solarized palette — for algorithm-role coloring
+JOYFUL: Dict[str, Any] = {
+    "current": ManimColor("#268BD2"),   # solarized blue  — element under examination
+    "sorted":  ManimColor("#2AA198"),   # solarized cyan  — final sorted position
+    "pivot":   ManimColor("#CB4B16"),   # solarized orange — quicksort pivot
+    "compare": ManimColor("#B58900"),   # solarized yellow — pair being compared
+    "accent":  ManimColor("#D33682"),   # solarized magenta — special highlight
+    "success": ManimColor("#859900"),   # solarized green  — milestone achieved
+    "default": WHITE,
+}
+
+# Subtle tinted fill for algorithm-role cells
+JOYFUL_FILL: Dict[str, Any] = {
+    "current": ManimColor("#0D2A40"),
+    "sorted":  ManimColor("#0A2520"),
+    "pivot":   ManimColor("#2A1408"),
+    "compare": ManimColor("#28220A"),
+    "accent":  ManimColor("#280A20"),
+    "success": ManimColor("#1A2005"),
+    "default": BLACK,
 }
 
 
@@ -163,7 +185,12 @@ class BooleanBox(VGroup):
 # ---------------------------------------------------------------------------
 
 class BoxSeries(VGroup):
-    """List / array as horizontal cells with index numbers below."""
+    """List / array as horizontal cells with index numbers below.
+
+    cell_states: optional dict mapping cell index (int) to a role string
+    ("current", "sorted", "pivot", "compare", "accent", "default").
+    Cells with a role get a Joyful accent color and tinted fill.
+    """
 
     def __init__(
         self,
@@ -174,19 +201,27 @@ class BoxSeries(VGroup):
         spacing: float = 0.06,
         stroke_color=WHITE,
         stroke_width: float = 2,
+        cell_states: Optional[Dict[int, str]] = None,
     ):
+        cell_states = cell_states or {}
         cells = []
         for i, val in enumerate(values):
+            role = cell_states.get(i, "default")
+            border_color = JOYFUL.get(role, stroke_color)
+            fill_color   = JOYFUL_FILL.get(role, BLACK)
+            text_color   = border_color if role != "default" else WHITE
+            bw = stroke_width if role == "default" else stroke_width + 1.0
+
             cell_box = RoundedRectangle(
                 corner_radius=0.08,
                 width=box_width,
                 height=box_height,
-                stroke_color=stroke_color,
-                stroke_width=stroke_width,
-                fill_color=BLACK,
+                stroke_color=border_color,
+                stroke_width=bw,
+                fill_color=fill_color,
                 fill_opacity=1,
             )
-            cell_text = Text(str(val), font=MONO_FONT, color=WHITE, font_size=16)
+            cell_text = Text(str(val), font=MONO_FONT, color=text_color, font_size=16)
             if cell_text.width > box_width - 0.1:
                 cell_text.scale_to_fit_width(box_width - 0.1)
             cell_text.move_to(cell_box.get_center())
@@ -209,6 +244,8 @@ class BoxSeries(VGroup):
         self.label = label
         self.box_width = box_width
         self.spacing = spacing
+        self.cell_states: Dict[int, str] = dict(cell_states)
+        self.cells: List[VGroup] = cells  # direct access to individual cell VGroups
 
 
 class NodeGraph(VGroup):
@@ -327,6 +364,68 @@ class ConsoleOutput(VGroup):
         visible = self.console_lines[-self.max_lines :]
         self.output_text.text = "\n".join(visible)
         self.output_text.move_to(self.background.get_center() + DOWN * 0.12)
+
+
+# ---------------------------------------------------------------------------
+# Full-frame chrome: HeaderBar, SidePanelDivider
+# ---------------------------------------------------------------------------
+
+class HeaderBar(VGroup):
+    """Top banner strip: algorithm name + current step title."""
+
+    HEIGHT = 0.72
+
+    def __init__(self, title: str = ""):
+        from manim import config as _cfg
+        bg = Rectangle(
+            width=_cfg.frame_width,
+            height=self.HEIGHT,
+            fill_color=ManimColor("#0D1B2A"),
+            fill_opacity=1.0,
+            stroke_color=ManimColor("#1E3A5C"),
+            stroke_width=1.5,
+        )
+        bg.to_edge(UP, buff=0)
+
+        title_obj = Text(
+            title, font=MONO_FONT,
+            color=ManimColor("#7FAACC"), font_size=17,
+        )
+        title_obj.move_to(bg.get_center())
+        if title and title_obj.width > _cfg.frame_width - 0.8:
+            title_obj.scale_to_fit_width(_cfg.frame_width - 0.8)
+
+        super().__init__(bg, title_obj)
+        self.bg        = bg
+        self.title_obj = title_obj
+
+
+class SidePanelDivider(VGroup):
+    """Subtle vertical rule + zone label separating primary stage from side panel."""
+
+    def __init__(self, x: float = 2.30, y_top: float = 3.22, y_bottom: float = -2.10):
+        line = Line(
+            start=[x, y_top, 0], end=[x, y_bottom, 0],
+            color=ManimColor("#1A3050"), stroke_width=1.5,
+        )
+        label = Text(
+            "Variables", font=MONO_FONT,
+            color=ManimColor("#4A6880"), font_size=11,
+        )
+        label.move_to([x + 2.45, y_top - 0.26, 0])
+        super().__init__(line, label)
+
+
+# ---------------------------------------------------------------------------
+# Auto-scaling helper
+# ---------------------------------------------------------------------------
+
+def auto_box_width(n_elements: int, available_width: float = 8.50) -> float:
+    """Per-cell width so a BoxSeries fills available_width with n_elements."""
+    if n_elements <= 0:
+        return 1.00
+    per_slot = available_width / n_elements
+    return max(0.58, min(1.40, per_slot - 0.10))
 
 
 # ---------------------------------------------------------------------------

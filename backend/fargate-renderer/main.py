@@ -4,7 +4,6 @@ import json
 import shutil
 import subprocess
 import boto3
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from botocore.exceptions import NoCredentialsError
 from manim import config
 
@@ -34,62 +33,34 @@ def upload_to_s3(local_file_path, s3_key):
         raise
 
 
-def _generate_voiceovers(storyboard_path: str, audio_dir: str) -> str:
+def _download_audio(job_id: str, audio_map_s3_key: str, audio_dir: str) -> str:
     """
-    Pre-generate TTS audio for every step in the storyboard.
-
-    Returns the path to the written audio_map JSON file, or an empty string
-    if TTS is unavailable (missing API key or import error).
+    Download audio files from S3 to audio_dir.
+    Returns path to a local audio_map.json with 'path' keys instead of 's3_key'.
     """
-    from tts_generator import generate_step_audio, get_audio_duration
+    s3 = boto3.client('s3')
+    os.makedirs(audio_dir, exist_ok=True)
 
-    if not os.getenv("OPENAI_API_KEY"):
-        print("OPENAI_API_KEY not set — skipping voiceover generation.")
-        return ""
+    raw = s3.get_object(Bucket=S3_BUCKET, Key=audio_map_s3_key)
+    payload = json.loads(raw['Body'].read().decode('utf-8'))
+    # Lambda writes { job_id, audio_map: { step_id: { s3_key, duration } }, generated_at }
+    remote_map = payload.get('audio_map', payload)
 
-    with open(storyboard_path) as f:
-        storyboard = json.load(f)
+    local_map = {}
+    for step_id, entry in remote_map.items():
+        s3_key = entry['s3_key']
+        local_path = os.path.join(audio_dir, f"step_{step_id}.mp3")
+        s3.download_file(S3_BUCKET, s3_key, local_path)
+        local_map[step_id] = {"path": os.path.abspath(local_path), "duration": entry['duration']}
+        print(f"  Downloaded audio step {step_id}: {entry['duration']:.2f}s")
 
-    steps = storyboard.get("script", [])
-    tts_steps = [
-        (step.get("step_id"), step.get("narration", "").strip())
-        for step in steps
-        if step.get("narration", "").strip()
-    ]
-
-    if not tts_steps:
-        return ""
-
-    audio_map = {}
-
-    def _generate_one(step_id, narration):
-        audio_path = generate_step_audio(step_id, narration, audio_dir)
-        duration = get_audio_duration(audio_path)
-        return step_id, audio_path, duration
-
-    with ThreadPoolExecutor(max_workers=min(8, len(tts_steps))) as executor:
-        futures = {executor.submit(_generate_one, sid, narr): sid for sid, narr in tts_steps}
-        for future in as_completed(futures):
-            try:
-                step_id, audio_path, duration = future.result()
-                audio_map[step_id] = {"path": audio_path, "duration": duration}
-                print(f"  Voiceover step {step_id}: {duration:.2f}s -> {audio_path}")
-            except Exception as e:
-                step_id = futures[future]
-                print(f"  Warning: TTS failed for step {step_id}: {e}")
-
-    if not audio_map:
-        return ""
-
-    audio_map_path = os.path.join(audio_dir, "audio_map.json")
-    with open(audio_map_path, "w") as f:
-        json.dump(audio_map, f)
-
-    print(f"Audio map written to: {audio_map_path}")
-    return audio_map_path
+    local_map_path = os.path.join(audio_dir, "audio_map.json")
+    with open(local_map_path, 'w') as f:
+        json.dump(local_map, f)
+    return local_map_path
 
 
-def render_animation(storyboard_path: str, output_format: str = "mp4") -> str | None:
+def render_animation(storyboard_path: str, audio_map_path: str = "", output_format: str = "mp4") -> str | None:
     """
     Renders a Manim animation from a JSON storyboard file.
     Returns the local path of the rendered file, or None on failure.
@@ -106,20 +77,14 @@ def render_animation(storyboard_path: str, output_format: str = "mp4") -> str | 
     target_file_name = f"{base_name}.{file_ext}"
 
     temp_media_dir = "./temp_render_output"
-    audio_dir = "./temp_audio"
     os.makedirs(temp_media_dir, exist_ok=True)
-    os.makedirs(audio_dir, exist_ok=True)
-
-    # Pre-generate voiceovers before Manim starts (audio files must exist at render time)
-    print("Generating voiceovers...")
-    audio_map_path = _generate_voiceovers(storyboard_path, audio_dir)
 
     # Escape backslashes for use inside the Python string literal in temp_scene.py
     safe_storyboard_path = storyboard_path.replace("\\", "\\\\")
-    safe_audio_map_path = audio_map_path.replace("\\", "\\\\")
+    safe_audio_map_path = audio_map_path.replace("\\", "\\\\") if audio_map_path else ""
 
     temp_scene_file = "./temp_scene.py"
-    audio_map_arg = f'"{safe_audio_map_path}"' if audio_map_path else "None"
+    audio_map_arg = f'"{safe_audio_map_path}"' if safe_audio_map_path else "None"
     scene_code = f'''
 from animation_scene import AnimationScene
 class CodeAnimatorScene(AnimationScene):
@@ -167,10 +132,8 @@ class CodeAnimatorScene(AnimationScene):
     finally:
         if os.path.exists(temp_scene_file):
             os.remove(temp_scene_file)
-        # Clean up temporary audio files after rendering
-        if os.path.exists(audio_dir):
-            shutil.rmtree(audio_dir, ignore_errors=True)
-            print("Temporary audio files cleaned up.")
+        if audio_map_path and os.path.exists("./temp_audio"):
+            shutil.rmtree("./temp_audio", ignore_errors=True)
 
 
 def fargate_main():
@@ -192,6 +155,7 @@ def fargate_main():
 
     script_s3_key = script_data.get("script_s3_key")
     job_id = script_data.get("ProjectID")
+    audio_map_s3_key = script_data.get("audio_map_s3_key", "")
 
     if not script_s3_key or not job_id:
         print(f"Error: Missing 'script_s3_key' or 'ProjectID' in SCRIPT_DATA: {script_data}")
@@ -212,7 +176,15 @@ def fargate_main():
         json.dump(storyboard, f)
     print(f"Storyboard saved to {tmp_storyboard_path}")
 
-    rendered_path = render_animation(tmp_storyboard_path, output_format="mp4")
+    local_audio_map_path = ""
+    if audio_map_s3_key:
+        print(f"Downloading audio from s3://{S3_BUCKET}/{audio_map_s3_key}")
+        local_audio_map_path = _download_audio(job_id, audio_map_s3_key, "./temp_audio")
+        print(f"Audio map ready: {local_audio_map_path}")
+    else:
+        print("No audio_map_s3_key — rendering without voiceover.")
+
+    rendered_path = render_animation(tmp_storyboard_path, audio_map_path=local_audio_map_path, output_format="mp4")
 
     if rendered_path:
         s3_output_key = f"projects/{job_id}/animation.mp4"
