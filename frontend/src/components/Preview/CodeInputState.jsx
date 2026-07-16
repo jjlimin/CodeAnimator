@@ -2,7 +2,7 @@ import React from 'react';
 import Editor from '@monaco-editor/react';
 import { Copy } from 'lucide-react';
 
-const CodeInputState = ({ code, setCode, projectId, setProjectId, onGenerate }) => {
+const CodeInputState = ({ code, setCode, error, onGenerate }) => {
   return (
     /* הסרנו את ה-group מהדיב הראשי והעברנו אותו למיכל העורך אם צריך */
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex flex-col h-full relative">
@@ -16,18 +16,15 @@ const CodeInputState = ({ code, setCode, projectId, setProjectId, onGenerate }) 
           </h1>
         </div>
         
-        <div className="flex flex-col items-end gap-1">
-          <div className="bg-[#1e1e1e] flex items-center px-3 py-1 sm:px-4 sm:py-1.5 rounded-md border border-white/5 focus-within:border-purple-500/50 transition-all shadow-inner">
-            <span className="text-[10px] sm:text-xs text-gray-500 font-medium select-none">ProjectId: </span>
-            <input 
-              type="text"
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-              className="bg-transparent border-none outline-none text-[10px] sm:text-xs text-gray-300 ml-1 w-24 sm:w-32 font-mono focus:ring-0 p-0"
-              placeholder="Enter ID..."
-            />
+        {error && (
+          <div className="flex flex-col items-end gap-1">
+            <div className="bg-red-500/10 flex items-center px-3 py-1 sm:px-4 sm:py-1.5 rounded-md border border-red-500/30 shadow-inner">
+              <span className="text-[10px] sm:text-xs text-red-400 font-medium select-none">
+                Something went wrong — please try again
+              </span>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* מיכל העורך - כאן הוספנו z-10 כדי שיהיה מעל התמונה */}

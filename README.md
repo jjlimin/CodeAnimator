@@ -12,8 +12,8 @@ parallel, and the final video (with TTS voiceover) lands in S3.
 ## How It Works
 
 ```
-user_code
-    ↓
+Frontend (React) — paste code, click Generate
+    ↓  POST /job  (API Gateway: CodeAnimatorAPI)
 createJobLambda        — creates job_id, writes PENDING to DynamoDB,
     ↓                    starts the Step Function
 Step Function: ai-code-animator-state-machine
@@ -30,7 +30,8 @@ Step Function: ai-code-animator-state-machine
     └─ 3. concatVideosLambda       — ffmpeg concat (stream copy) →
             jobs/{job_id}/final_output.mp4, DynamoDB status = COMPLETED
 
-CheckStatusLambda      — GET status/video_url by job_id
+Frontend polls GET /job?job_id=... (CheckStatusLambda) every 10s until
+COMPLETED, then plays the video via a presigned S3 URL (the bucket is private).
 ```
 
 ## The AI Agent (AIAgentLambda)
@@ -73,8 +74,11 @@ python local_test.py --self-test  # validator smoke test, no API calls
 
 ```
 CodeAnimator/
-├── frontend/                          # React SPA (NOTE: targets the previous
-│                                      #  API contract — pending update)
+├── frontend/                          # React SPA (Vite + Monaco + Tailwind)
+│   └── src/
+│       ├── api/videoApi.js            # POST /job, GET /job?job_id=...
+│       ├── hooks/useVideoPoll.jsx     # 10s status poller with timeout
+│       └── pages/GeneratorPage.jsx
 ├── backend/
 │   ├── lambdas/
 │   │   ├── AIAgentLambda/             # the AI agent (see above)
@@ -137,16 +141,33 @@ CodeAnimator/
 
 ---
 
-## API Reference
+## Frontend
 
-### `POST createJobLambda` — body:
+```bash
+cd frontend
+cp .env.example .env    # points VITE_API_URL at the CodeAnimatorAPI endpoint
+npm install
+npm run dev             # http://localhost:5173
+```
+
+Flow: paste Python code → **Generate Video** → processing screen polls the API
+→ the finished video plays with TTS narration (press Play — browsers block
+autoplay with sound).
+
+---
+
+## API Reference (HTTP API `CodeAnimatorAPI`)
+
+### `POST /job`
 ```json
 { "user_code": "# Python code here" }
 ```
 Returns `{ "job_id": "...", "message": "Job started" }`.
 
-### `CheckStatusLambda` — `?job_id=...`
+### `GET /job?job_id=...`
 Returns `{ "job_id", "status": "PENDING" | "COMPLETED", "video_url" }`.
+`video_url` is a **presigned S3 URL** (valid 1 hour) — the media bucket is
+private, so the stored public-style URL is converted on every status call.
 
 ---
 
