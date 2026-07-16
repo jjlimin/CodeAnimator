@@ -26,13 +26,12 @@ const DoneState = ({ videoUrl, code, onEdit }) => (
     </div> */}
 
     <div className="rounded-[2.5rem] overflow-hidden shadow-2xl border-8 border-[#2a2a2a] bg-black aspect-video relative group">
-      <video 
+      {/* בלי autoPlay/muted — כדי שהקריינות תישמע בלחיצת Play.
+          בלי crossOrigin — לבאקט אין הגדרת CORS ומדיה לא צריכה אותה */}
+      <video
         key={videoUrl}
         controls
-        autoPlay
-        muted
         className="w-full h-full object-contain"
-        crossOrigin="anonymous"
       >
         <source src={videoUrl} type="video/mp4" />
         Your browser does not support the video tag.

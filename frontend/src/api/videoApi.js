@@ -1,16 +1,13 @@
-import { USER_ID } from '../constants/auth';
-
 const BASE_URL = import.meta.env.VITE_API_URL;
 
-export const generateVideo = async (projectId, code) => {
+// POST /job — starts a new animation job, returns { job_id, message }
+export const generateVideo = async (code) => {
     try {
-        const response = await fetch(`${BASE_URL}/generate`, {
+        const response = await fetch(`${BASE_URL}/job`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                UserID: USER_ID,
-                ProjectID: projectId,
-                code: code
+                user_code: code
             }),
         });
 
@@ -20,22 +17,20 @@ export const generateVideo = async (projectId, code) => {
         }
 
         return await response.json();
-    } 
+    }
     catch (error) {
         console.error("Fetch error:", error);
-        throw error; 
+        throw error;
     }
 };
 
-export const checkStatus = async (projectId) => {
-  const cleanId = projectId.startsWith('PROJ#') ? projectId.replace('PROJ#', '') : projectId;
-  const url = `${BASE_URL}/status?userId=${encodeURIComponent(USER_ID)}&projectId=${encodeURIComponent(cleanId)}`;
-  
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: { 'Content-Type': 'application/json' }
-  });
-  
+// GET /job?job_id=... — returns { job_id, status: PENDING | COMPLETED, video_url }
+// video_url is a presigned S3 URL (the bucket is private), valid for 1 hour
+export const checkStatus = async (jobId) => {
+  const url = `${BASE_URL}/job?job_id=${encodeURIComponent(jobId)}`;
+
+  const response = await fetch(url, { method: 'GET' });
+
   if (!response.ok) {
     throw new Error(`Status check failed: ${response.status}`);
   }
