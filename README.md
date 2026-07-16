@@ -2,60 +2,70 @@
 
 Transform Python code into animated educational videos — automatically.
 
-CodeAnimator takes Python code as input and generates a step-by-step visual animation with narration that explains how the code executes. Built on AWS serverless infrastructure, it uses AI to produce Manim-rendered MP4 videos walkthrough through program execution, variable changes, and data structures.
-
----
-
-## Demo
-
-1. Paste Python code into the editor
-2. Click **Generate**
-3. Wait ~2–3 minutes while the pipeline runs
-4. Watch and download your animation
+CodeAnimator takes Python code as input and generates a narrated, step-by-step
+Manim animation explaining how the code works. An AI agent with a
+self-correction loop generates the scenes, AWS Fargate renders them in
+parallel, and the final video (with TTS voiceover) lands in S3.
 
 ---
 
 ## How It Works
 
 ```
-Python Code (user input)
+user_code
     ↓
-Parser Lambda        — converts code to an AST JSON via Python's ast module
-    ↓
-ScriptGenerator Lambda — uses OpenAI to turn the AST into a Manim animation script
-    ↓
-Fargate Renderer     — runs Manim + FFmpeg inside a container to render the MP4
-    ↓
-S3                   — stores the finished video; returns a presigned URL
-    ↓
-Frontend             — polls for status every 15 s, then plays/downloads the video
+createJobLambda        — creates job_id, writes PENDING to DynamoDB,
+    ↓                    starts the Step Function
+Step Function: ai-code-animator-state-machine
+    │
+    ├─ 1. AIAgentLambda            — AI agent generates the scenes
+    │       generate → validate → self-correct loop (see below)
+    │       returns {job_id, scenes: [{scene_id, narration, manim_code}]}
+    │
+    ├─ 2. RenderScenesMap          — Map over scenes, MaxConcurrency 4
+    │       each scene → ECS Fargate task (manim-container):
+    │       OpenAI TTS (gpt-4o-mini-tts) → Manim render → ffmpeg mux
+    │       (narration merged into the video) → S3 jobs/{job_id}/scenes/
+    │
+    └─ 3. concatVideosLambda       — ffmpeg concat (stream copy) →
+            jobs/{job_id}/final_output.mp4, DynamoDB status = COMPLETED
+
+CheckStatusLambda      — GET status/video_url by job_id
 ```
 
-All steps are orchestrated by AWS Step Functions.
+## The AI Agent (AIAgentLambda)
 
----
+The core of the pipeline is an agentic loop that guarantees the generated
+Manim code actually runs before it ever reaches the renderer:
 
-## Tech Stack
+1. **Generate** — one OpenAI **Responses API** call (structured JSON output).
+   The model decides the number of scenes dynamically: total narration is
+   budgeted at 60–120 seconds (~150 words/min), fewer/shorter scenes for
+   simpler input.
+2. **Validate** every scene without rendering video, in tiers:
+   - `ast.parse` syntax check;
+   - static Manim lint — structure checks plus a table of APIs/kwargs that
+     LLMs hallucinate from old Manim versions (`ShowCreation`, `Code(code=...)`,
+     `Code(font_size=...)`, …) with the correct replacement in the error text;
+   - full dry-run execution in a subprocess (`config.dry_run = True`) — only
+     where the `manim` package is importable (local dev / container), skipped
+     automatically in the zip-packaged Lambda.
+3. **Self-correct** — failed scenes go back to the model with their exact
+   error/traceback; validated scenes are frozen. Up to `MAX_RETRIES` rounds
+   (default 3), also bounded by the Lambda's remaining execution time.
+4. On success: raw code strings out. If a scene still fails after all
+   retries, the job fails loudly (no broken code reaches the renderer).
 
-### Frontend
-| Tool | Purpose |
-|------|---------|
-| React 19 + Vite | UI framework and build tool |
-| Monaco Editor | Code editor with syntax highlighting |
-| Tailwind CSS 4 | Styling |
-| Axios | HTTP client |
+Test it locally without any AWS (mocks the Lambda event/context):
 
-### Backend
-| Tool | Purpose |
-|------|---------|
-| AWS Lambda (Python 3.12) | Parser & ScriptGenerator |
-| AWS ECS Fargate | Containerised Manim renderer |
-| AWS Step Functions | Pipeline orchestration |
-| DynamoDB | Job status tracking |
-| S3 | Asset + video storage |
-| OpenAI API | Animation script generation + TTS narration |
-| Manim 0.18 | Mathematical animation engine |
-| FFmpeg | Video encoding |
+```bash
+cd backend/lambdas/AIAgentLambda
+pip install openai manim          # manim optional but enables full dry-run validation
+echo "OPENAI_API_KEY=sk-..." > .env
+python local_test.py              # built-in sample
+python local_test.py --file my_code.py
+python local_test.py --self-test  # validator smoke test, no API calls
+```
 
 ---
 
@@ -63,148 +73,80 @@ All steps are orchestrated by AWS Step Functions.
 
 ```
 CodeAnimator/
-├── frontend/                     # React SPA
-│   └── src/
-│       ├── api/videoApi.js       # generate & status calls
-│       ├── components/           # Sidebar, CodeInput, Processing, Done views
-│       ├── hooks/useVideoPoll.jsx # 15-second status poller
-│       └── pages/GeneratorPage.jsx
-│
+├── frontend/                          # React SPA (NOTE: targets the previous
+│                                      #  API contract — pending update)
 ├── backend/
 │   ├── lambdas/
-│   │   ├── CodeAnimator-Parser/          # Python → AST JSON
-│   │   ├── CodeAnimator-ScriptGenerator/ # AST → Manim script via OpenAI
-│   │   ├── CodeAnimator-StatusChecker/   # Job status lookup
-│   │   └── CodeAnimator-Notifier/        # Writes video URL to DynamoDB
-│   ├── fargate-renderer/                 # Manim rendering service
-│   │   ├── Dockerfile
-│   │   ├── main.py
-│   │   ├── animation_scene.py
-│   │   └── renderer.py
-│   ├── dynamodb/CodeAnimatorTable.json
-│   └── step-functions/CodeAnimator-StepFunction.json
-│
-└── poc/                          # Early proof-of-concept code
+│   │   ├── AIAgentLambda/             # the AI agent (see above)
+│   │   │   ├── lambda_function.py     # handler + self-correction loop
+│   │   │   ├── prompts.py             # system prompts + JSON schemas
+│   │   │   ├── validator.py           # tiered Manim validation
+│   │   │   ├── local_test.py          # local harness (no AWS needed)
+│   │   │   └── requirements.txt
+│   │   ├── concatVideosLambda/        # ffmpeg concat of rendered scenes
+│   │   ├── createJobLambda/           # job creation + state machine start
+│   │   ├── CheckStatusLambda/         # job status lookup
+│   │   └── ApiTriggerLambda/          # (stub)
+│   ├── fargate-worker/                # ECS render container
+│   │   ├── Dockerfile                 # extends the worker image, adds ffmpeg
+│   │   └── render_worker.py           # TTS → Manim render → audio mux → S3
+│   ├── layers/                        # Lambda layer build docs + scripts
+│   ├── step-functions/ai-code-animator-state-machine.json
+│   ├── ecs/ManimRenderTask.json       # task definition (family revision 4+)
+│   └── dynamodb/CodeAnimatorJobs.json
+├── poc/                               # early proof-of-concept code
+└── docs/
 ```
 
 ---
 
-## Getting Started
+## Tech Stack
 
-### Prerequisites
-
-- Node.js 18+
-- Python 3.12+
-- Docker (for local Fargate renderer testing)
-- AWS account with the following set up:
-  - DynamoDB table `CodeAnimatorTable`
-  - S3 bucket `code-animator-assets`
-  - Step Functions state machine deployed
-  - Lambda functions deployed
-  - ECS Fargate cluster with ECR image `code-animator-engine:latest`
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev        # http://localhost:5173
-```
-
-### Fargate Renderer (local testing)
-
-```bash
-cd backend/fargate-renderer
-pip install -r requirements.txt
-python main.py
-```
-
-```bash
-# Build and push Docker image
-docker build -t code-animator-engine:latest .
-# Tag and push to your ECR repository
-```
+| Layer | Tool |
+|-------|------|
+| Scene generation | OpenAI Responses API, `gpt-4.1-mini`, structured outputs |
+| Narration (TTS) | OpenAI `gpt-4o-mini-tts` (voice: alloy) |
+| Animation engine | Manim Community v0.20 (in the Fargate container) |
+| Rendering | ECS Fargate (2 vCPU / 4 GB), up to 4 scenes in parallel |
+| Video assembly | ffmpeg (mux in container; concat via `ffmpeg-layer` in Lambda) |
+| Orchestration | AWS Step Functions |
+| State / storage | DynamoDB `CodeAnimatorJobs`, S3 `code-animator-media-bucket-2026` |
+| Compute | AWS Lambda python3.12 (zip + layers — no container Lambdas needed) |
 
 ---
 
-## Environment Variables
+## Deployment Notes (AWS Academy Learner Lab)
 
-### Frontend
-
-Create a `.env` file inside `frontend/`:
-
-```env
-VITE_API_URL=https://<your-api-gateway-url>
-```
-
-### Backend Lambdas
-
-Set these in the Lambda console or via IaC:
-
-| Variable | Description |
-|----------|-------------|
-| `OPENAI_API_KEY` | OpenAI API key for script generation and TTS |
-
-### Fargate Renderer
-
-| Variable | Description |
-|----------|-------------|
-| `OPENAI_API_KEY` | OpenAI API key for TTS narration |
-| `AWS_S3_BUCKET` | S3 bucket name (default: `code-animator-assets`) |
-| `SCRIPT_DATA` | Injected at runtime by Step Functions |
+- All Lambdas run with `LabRole`, region `us-east-1`.
+- `AIAgentLambda`: timeout 300s, 512MB, layer `openai-linux-layer`,
+  env `OPENAI_API_KEY` + `OPENAI_MODEL` (default `gpt-4o-mini`; deployed with
+  `gpt-4.1-mini`).
+- `concatVideosLambda`: timeout 300s, 1024MB, 2GB `/tmp`, layer `ffmpeg-layer`.
+- Render image: ECR `code-animator-manim-worker:v4` — build from
+  `backend/fargate-worker/`, push, then register a new `ManimRenderTask`
+  revision pointing at the new tag (the state machine picks up the latest
+  revision automatically).
+- The state machine JSON in this repo has the OpenAI key replaced with
+  `REPLACE_WITH_OPENAI_API_KEY` — set the real key when creating/updating it.
+- Update Lambda code with:
+  ```bash
+  cd backend/lambdas/AIAgentLambda
+  zip -j deploy.zip lambda_function.py prompts.py validator.py
+  aws lambda update-function-code --function-name AIAgentLambda --zip-file fileb://deploy.zip
+  ```
 
 ---
 
 ## API Reference
 
-### `POST /generate`
-
-Start a new animation job.
-
-**Request body:**
+### `POST createJobLambda` — body:
 ```json
-{
-  "UserID": "string",
-  "ProjectID": "string",
-  "code": "# Python code here"
-}
+{ "user_code": "# Python code here" }
 ```
+Returns `{ "job_id": "...", "message": "Job started" }`.
 
-**Response:** Returns the `ProjectID` used to poll status.
-
----
-
-### `GET /status?userId=&projectId=`
-
-Poll job progress.
-
-**Response:**
-```json
-{
-  "Status": "Done",
-  "S3_VideoUrl": "https://..."
-}
-```
-
-**Status values:** `Parsing` → `GeneratingContent` → `ScriptGenerated` → `Done` | `Error` | `SyntaxError`
-
----
-
-## DynamoDB Schema
-
-**Table:** `CodeAnimatorTable`  
-**Primary key:** `UserID` (partition) + `ProjectID` (sort, format `PROJ#{job_id}`)
-
-Key attributes: `Status`, `startTime`, `VideoS3Key`, `VideoURL`, `FinishedAt`, `errorMessage`
-
----
-
-## Contributing
-
-1. Fork the repo
-2. Create a feature branch (`git checkout -b feature/my-feature`)
-3. Commit your changes
-4. Open a pull request against `main`
+### `CheckStatusLambda` — `?job_id=...`
+Returns `{ "job_id", "status": "PENDING" | "COMPLETED", "video_url" }`.
 
 ---
 

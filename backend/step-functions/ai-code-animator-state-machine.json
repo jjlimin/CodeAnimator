@@ -1,0 +1,68 @@
+{
+  "StartAt": "AIAgent",
+  "States": {
+    "AIAgent": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:719246278807:function:AIAgentLambda",
+      "Next": "RenderScenesMap"
+    },
+    "RenderScenesMap": {
+      "Type": "Map",
+      "ItemsPath": "$.scenes",
+      "MaxConcurrency": 4,
+      "ItemSelector": {
+        "job_id.$": "$.job_id",
+        "scene_id.$": "$$.Map.Item.Value.scene_id",
+        "narration.$": "$$.Map.Item.Value.narration",
+        "manim_code.$": "$$.Map.Item.Value.manim_code"
+      },
+      "Iterator": {
+        "StartAt": "RunFargateTask",
+        "States": {
+          "RunFargateTask": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::ecs:runTask.sync",
+            "Parameters": {
+              "LaunchType": "FARGATE",
+              "Cluster": "CodeAnimatorCluster2",
+              "TaskDefinition": "ManimRenderTask",
+              "NetworkConfiguration": {
+                "AwsvpcConfiguration": {
+                  "Subnets": ["subnet-05871bf0571840868"],
+                  "AssignPublicIp": "ENABLED"
+                }
+              },
+              "Overrides": {
+                "ContainerOverrides": [
+                  {
+                    "Name": "manim-container",
+                    "Environment": [
+                      { "Name": "JOB_ID", "Value.$": "$.job_id" },
+                      { "Name": "SCENE_ID", "Value.$": "States.Format('{}', $.scene_id)" },
+                      { "Name": "NARRATION", "Value.$": "$.narration" },
+                      { "Name": "MANIM_CODE", "Value.$": "$.manim_code" },
+                      { "Name": "OPENAI_API_KEY", "Value": "REPLACE_WITH_OPENAI_API_KEY" }
+                    ]
+                  }
+                ]
+              }
+            },
+            "End": true
+          }
+        }
+      },
+      "ResultPath": null,
+      "Next": "ConcatVideos"
+    },
+    "ConcatVideos": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:719246278807:function:concatVideosLambda",
+        "Payload.$": "$"
+      },
+      "OutputPath": "$.Payload",
+      "End": true
+    }
+  }
+}

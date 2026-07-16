@@ -11,3 +11,8 @@ venv/
 
 # PyCharm
 .idea/
+# Secrets ? never commit API keys
+.env
+
+# Local test artifacts
+local_test_output.json

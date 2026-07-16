@@ -1,0 +1,6 @@
+# Lambda deployment package (zip) — only this goes to AWS:
+openai>=1.60.0
+
+# Local development only — enables the dry-run validation tier and local rendering.
+# Do NOT bundle into the zip Lambda (needs pango/cairo system libs; exceeds size limits).
+#   pip install manim
