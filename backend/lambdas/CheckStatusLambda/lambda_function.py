@@ -42,6 +42,7 @@ def lambda_handler(event, context):
             "body": json.dumps({
                 "job_id": item['job_id']['S'],
                 "status": item.get('status', {}).get('S', 'UNKNOWN'),
+                "title": item.get('title', {}).get('S', ''),
                 "video_url": video_url
             })
         }

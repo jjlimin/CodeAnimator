@@ -10,8 +10,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@aws-amplify/ui-react": "^6.15.4",
     "@monaco-editor/react": "^4.7.0",
     "@tailwindcss/vite": "^4.2.4",
+    "aws-amplify": "^6.18.0",
     "axios": "^1.15.2",
     "clsx": "^2.1.1",
     "lucide-react": "^1.11.0",
