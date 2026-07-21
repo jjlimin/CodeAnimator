@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { useAuthenticator } from '@aws-amplify/ui-react';
-import { fetchUserAttributes, updateUserAttributes } from 'aws-amplify/auth';
+import { fetchUserAttributes, updateUserAttributes, fetchAuthSession } from 'aws-amplify/auth';
 import {
   generateVideo,
   checkStatus,
@@ -28,12 +28,30 @@ export function AppProvider({ children }) {
   const [code, setCode] = useState('# Paste your code here\nprint("Hello World!")');
 
   // Load the signed-in user's name/email for the greeting + sidebar.
-  // `name` may be empty for a brand-new user — that triggers onboarding.
+  // Read from the ID token first — it carries `name`/`email` for BOTH email
+  // and Google sign-ins, so a Google user with a name never wrongly lands on
+  // onboarding. Fall back to GetUser to enrich if needed.
+  // `name` still empty only for a brand-new email user -> that triggers onboarding.
   useEffect(() => {
-    fetchUserAttributes()
-      .then((a) => setProfile({ name: a.name || '', email: a.email || '' }))
-      .catch(() => {})
-      .finally(() => setProfileLoaded(true));
+    (async () => {
+      let name = '';
+      let email = '';
+      try {
+        const session = await fetchAuthSession();
+        const claims = session.tokens?.idToken?.payload || {};
+        name = claims.name || '';
+        email = claims.email || '';
+      } catch { /* ignore */ }
+      if (!name || !email) {
+        try {
+          const a = await fetchUserAttributes();
+          name = name || a.name || '';
+          email = email || a.email || '';
+        } catch { /* ignore */ }
+      }
+      setProfile({ name, email });
+      setProfileLoaded(true);
+    })();
   }, [user]);
 
   const needsOnboarding = profileLoaded && !profile.name;
