@@ -1,41 +1,15 @@
-import React, { useState } from 'react';
-import { generateVideo } from '../api/videoApi';
-import { useVideoPoll } from '../hooks/useVideoPoll';
+import React from 'react';
 import { Search } from 'lucide-react';
+import { useApp } from '../context/AppContext';
 import ProcessingState from '../components/Preview/ProcessingState';
 import DoneState from '../components/Preview/DoneState';
 import CodeInputState from '../components/Preview/CodeInputState';
 
 const GeneratorPage = () => {
-  const [code, setCode] = useState('# Paste your code here\nprint("Hello World!")');
-  const [jobId, setJobId] = useState(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-
-  const { status, videoUrl, setStatus } = useVideoPoll(jobId, isGenerating);
-
-  const handleGenerate = async () => {
-    setIsGenerating(true);
-    try {
-      // ה-job_id נוצר בשרת (createJobLambda) ומוחזר בתשובה
-      const data = await generateVideo(code);
-      setJobId(data.job_id);
-    } catch (err) {
-      console.error("Failed to start job:", err);
-      setIsGenerating(false);
-      setStatus('error');
-    }
-  };
-
-  const handleCancel = () => {
-    setIsGenerating(false);
-    setJobId(null);
-    setStatus('idle');
-  };
+  const { view, code, setCode, startGenerate, newVideo, videoUrl, currentTitle, renameJob, activeJobId } = useApp();
 
   return (
     <div className="flex flex-col h-full w-full">
-
-      {/* --- ה-Header שחזר למקומו --- */}
       <header className="flex items-center justify-between mb-8 w-full">
         <div className="flex items-center gap-2">
           <img src="/logo.svg" alt="Logo" className="w-8 h-8 object-contain" />
@@ -46,34 +20,23 @@ const GeneratorPage = () => {
         </button>
       </header>
 
-      {/* --- האזור המרכזי הממורכז --- */}
       <div className="flex-1 flex flex-col items-center justify-center w-full">
         <div className="w-full max-w-4xl">
-
-          {/* מצב 1: הזנת קוד */}
-          {(status === 'idle' || status === 'error') && (
-            <CodeInputState
-              code={code}
-              setCode={setCode}
-              error={status === 'error'}
-              onGenerate={handleGenerate}
-            />
+          {view === 'idle' && (
+            <CodeInputState code={code} setCode={setCode} onGenerate={startGenerate} />
           )}
 
-          {/* מצב 2: טעינה ופולינג */}
-          {status === 'processing' && (
-            <ProcessingState onCancel={handleCancel} />
-          )}
+          {view === 'processing' && <ProcessingState onCancel={newVideo} />}
 
-          {/* מצב 3: הצגת הוידאו המוכן */}
-          {status === 'Done' && (
+          {view === 'done' && (
             <DoneState
               videoUrl={videoUrl}
+              title={currentTitle}
               code={code}
-              onEdit={() => { setIsGenerating(false); setJobId(null); setStatus('idle'); }}
+              onRename={(t) => renameJob(activeJobId, t)}
+              onEdit={newVideo}
             />
           )}
-
         </div>
       </div>
     </div>

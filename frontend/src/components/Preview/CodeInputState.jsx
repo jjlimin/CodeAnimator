@@ -1,8 +1,11 @@
 import React from 'react';
 import Editor from '@monaco-editor/react';
 import { Copy } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
 
 const CodeInputState = ({ code, setCode, error, onGenerate }) => {
+  const { profile } = useApp();
+  const firstName = (profile.name || '').trim().split(' ')[0] || 'there';
   return (
     /* הסרנו את ה-group מהדיב הראשי והעברנו אותו למיכל העורך אם צריך */
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex flex-col h-full relative">
@@ -10,7 +13,7 @@ const CodeInputState = ({ code, setCode, error, onGenerate }) => {
       {/* כותרות עליונות */}
       <div className="flex justify-between items-end mb-4 sm:mb-6 shrink-0 relative z-10">
         <div>
-          <p className="text-gray-400 text-sm sm:text-lg font-medium">Hi Yogev!</p>
+          <p className="text-gray-400 text-sm sm:text-lg font-medium">Hi {firstName}!</p>
           <h1 className="text-3xl sm:text-5xl font-bold mt-1 text-white tracking-tight">
             Paste your code here
           </h1>
