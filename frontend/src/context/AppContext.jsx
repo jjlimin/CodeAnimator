@@ -1,11 +1,12 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { useAuthenticator } from '@aws-amplify/ui-react';
-import { fetchUserAttributes } from 'aws-amplify/auth';
+import { fetchUserAttributes, updateUserAttributes } from 'aws-amplify/auth';
 import {
   generateVideo,
   checkStatus,
   getJobs,
   renameJob as apiRenameJob,
+  cancelJob as apiCancelJob,
 } from '../api/videoApi';
 
 const AppContext = createContext(null);
@@ -18,6 +19,7 @@ export function AppProvider({ children }) {
   const { user, signOut } = useAuthenticator((c) => [c.user]);
 
   const [profile, setProfile] = useState({ name: '', email: '' });
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const [jobs, setJobs] = useState([]);
   const [view, setView] = useState('idle'); // idle | processing | done
   const [activeJobId, setActiveJobId] = useState(null);
@@ -26,11 +28,23 @@ export function AppProvider({ children }) {
   const [code, setCode] = useState('# Paste your code here\nprint("Hello World!")');
 
   // Load the signed-in user's name/email for the greeting + sidebar.
+  // `name` may be empty for a brand-new user — that triggers onboarding.
   useEffect(() => {
     fetchUserAttributes()
-      .then((a) => setProfile({ name: a.name || a.email || '', email: a.email || '' }))
-      .catch(() => {});
+      .then((a) => setProfile({ name: a.name || '', email: a.email || '' }))
+      .catch(() => {})
+      .finally(() => setProfileLoaded(true));
   }, [user]);
+
+  const needsOnboarding = profileLoaded && !profile.name;
+
+  // Save the user's chosen name to Cognito (onboarding).
+  const saveName = useCallback(async (name) => {
+    const clean = (name || '').trim();
+    if (!clean) return;
+    await updateUserAttributes({ userAttributes: { name: clean } });
+    setProfile((p) => ({ ...p, name: clean }));
+  }, []);
 
   const refreshJobs = useCallback(async () => {
     try {
@@ -141,8 +155,27 @@ export function AppProvider({ children }) {
     setVideoUrl(null);
   }, []);
 
+  // Cancel actually stops the running job (Step Function + render), then resets.
+  const cancelJob = useCallback(async (jobId) => {
+    const id = jobId || activeJobId;
+    setView('idle');
+    setActiveJobId(null);
+    setVideoUrl(null);
+    if (!id) return;
+    try {
+      await apiCancelJob(id);
+    } catch (e) {
+      console.error('cancel failed', e);
+    } finally {
+      refreshJobs();
+    }
+  }, [activeJobId, refreshJobs]);
+
   const value = {
     profile,
+    profileLoaded,
+    needsOnboarding,
+    saveName,
     jobs,
     view,
     videoUrl,
@@ -152,6 +185,7 @@ export function AppProvider({ children }) {
     startGenerate,
     openJob,
     renameJob,
+    cancelJob,
     newVideo,
     signOut,
     activeJobId,

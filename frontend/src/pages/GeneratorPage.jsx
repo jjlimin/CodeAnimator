@@ -6,7 +6,7 @@ import DoneState from '../components/Preview/DoneState';
 import CodeInputState from '../components/Preview/CodeInputState';
 
 const GeneratorPage = () => {
-  const { view, code, setCode, startGenerate, newVideo, videoUrl, currentTitle, renameJob, activeJobId } = useApp();
+  const { view, code, setCode, startGenerate, newVideo, cancelJob, videoUrl, currentTitle, renameJob, activeJobId } = useApp();
 
   return (
     <div className="flex flex-col h-full w-full">
@@ -26,7 +26,7 @@ const GeneratorPage = () => {
             <CodeInputState code={code} setCode={setCode} onGenerate={startGenerate} />
           )}
 
-          {view === 'processing' && <ProcessingState onCancel={newVideo} />}
+          {view === 'processing' && <ProcessingState onCancel={() => cancelJob(activeJobId)} />}
 
           {view === 'done' && (
             <DoneState

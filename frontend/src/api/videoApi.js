@@ -55,3 +55,13 @@ export const renameJob = async (jobId, title) => {
   if (!response.ok) throw new Error(`rename failed: ${response.status}`);
   return response.json();
 };
+
+// DELETE /job?job_id=... — cancel an in-progress job (stops the render).
+export const cancelJob = async (jobId) => {
+  const response = await fetch(`${BASE_URL}/job?job_id=${encodeURIComponent(jobId)}`, {
+    method: 'DELETE',
+    headers: await authHeaders(),
+  });
+  if (!response.ok) throw new Error(`cancel failed: ${response.status}`);
+  return response.json();
+};
