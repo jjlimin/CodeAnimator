@@ -5,6 +5,7 @@ import { Pencil, Download, Check } from 'lucide-react';
 const DoneState = ({ videoUrl, title, code, onRename, onEdit }) => {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title || '');
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     setDraft(title || '');
@@ -13,6 +14,29 @@ const DoneState = ({ videoUrl, title, code, onRename, onEdit }) => {
   const commit = () => {
     if (draft.trim() && draft.trim() !== title) onRename(draft.trim());
     setEditing(false);
+  };
+
+  // Fetch the video as a blob and save it directly (a plain <a download> is
+  // ignored for cross-origin S3 URLs, which is why it used to open a new tab).
+  const handleDownload = async () => {
+    if (!videoUrl || downloading) return;
+    setDownloading(true);
+    try {
+      const res = await fetch(videoUrl);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(title || 'codeanimator-video').replace(/[^\w\-]+/g, '_')}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('download failed', e);
+    } finally {
+      setDownloading(false);
+    }
   };
 
   return (
@@ -53,9 +77,9 @@ const DoneState = ({ videoUrl, title, code, onRename, onEdit }) => {
           <button onClick={onEdit} className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors text-lg">
             <Pencil size={20} /> New video
           </button>
-          <a href={videoUrl} download className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors text-lg">
-            <Download size={20} /> Download
-          </a>
+          <button onClick={handleDownload} disabled={downloading} className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors text-lg disabled:opacity-50">
+            <Download size={20} /> {downloading ? 'Downloading...' : 'Download'}
+          </button>
         </div>
       </div>
 

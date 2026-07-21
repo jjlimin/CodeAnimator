@@ -66,22 +66,7 @@ const CodeInputState = ({ code, setCode, error, onGenerate }) => {
 
         <div className="absolute bottom-0 left-0 right-0 h-24 sm:h-32 bg-gradient-to-t from-[#1e1e1e] to-transparent pointer-events-none z-10 opacity-70"></div>
       </div>
-
-      {/* --- התמונה החדשה: ממוקמת מחוץ למיכל ה-overflow --- */}
-      <div 
-        className="fixed bottom-[-60px] right-[-60px] z-0 opacity-30 pointer-events-none"
-        style={{
-          width: '400px', 
-          right: '-60px', // הזזה ימינה
-          bottom: '-120px', // כאן תשחק עם המספר כדי להוריד/להעלות
-        }}
-      >
-        <img 
-          src="/background.svg" 
-          alt="Floating decoration" 
-          className="w-full h-full object-contain"
-        />
-      </div>
+      {/* Mascot moved to MainLayout so it stays visible during generation. */}
     </div>
   );
 };

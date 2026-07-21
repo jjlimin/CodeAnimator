@@ -19,7 +19,8 @@ createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ThemeProvider theme={theme} colorMode="dark">
       <Authenticator.Provider>
-        <Authenticator socialProviders={['google']} signUpAttributes={['name']}>
+        {/* Name is collected in the onboarding step, not at sign-up. */}
+        <Authenticator socialProviders={['google']}>
           <App />
         </Authenticator>
       </Authenticator.Provider>
