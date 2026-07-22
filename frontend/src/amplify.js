@@ -17,10 +17,14 @@ Amplify.configure({
           redirectSignIn: [
             'http://localhost:5173/',
             'https://main.d13stb50mb84v8.amplifyapp.com/',
+            'https://codeanimator.app/',
+            'https://www.codeanimator.app/',
           ],
           redirectSignOut: [
             'http://localhost:5173/',
             'https://main.d13stb50mb84v8.amplifyapp.com/',
+            'https://codeanimator.app/',
+            'https://www.codeanimator.app/',
           ],
           responseType: 'code',
         },
