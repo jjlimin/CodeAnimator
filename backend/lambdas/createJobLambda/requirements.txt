@@ -1,0 +1,4 @@
+# Static validation of user code (undefined names, syntax). Pure Python — bundle
+# into the deployment zip alongside lambda_function.py:
+#   pip install pyflakes --target build/ && cp lambda_function.py build/ && zip -r ../createJob.zip .
+pyflakes>=3.0.0

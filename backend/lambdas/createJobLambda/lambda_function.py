@@ -1,3 +1,4 @@
+import ast
 import json
 import boto3
 import uuid
@@ -23,16 +24,34 @@ def default_title():
 
 
 def validate_python_code(code):
-    """Return None if the code compiles, else a short human-readable error.
-    Catches syntax / compile errors (NOT runtime logic bugs)."""
+    """Return None if the code looks runnable, else a short human-readable error.
+
+    Two static tiers (no code is executed):
+      1. compile() -> syntax / parse errors (e.g. print(Hello World!)).
+      2. pyflakes  -> undefined names (e.g. print(xsd), or gibberish that is a
+         syntactically valid but undefined identifier)."""
+    # Tier 1: syntax.
     try:
-        compile(code, '<user_code>', 'exec')
-        return None
+        tree = compile(code, '<user_code>', 'exec', ast.PyCF_ONLY_AST)
     except SyntaxError as e:
         loc = f" (line {e.lineno})" if e.lineno else ""
         return f"{e.msg}{loc}"
     except Exception as e:  # e.g. ValueError for null bytes
         return str(e)
+
+    # Tier 2: undefined names via pyflakes (static, safe). Only undefined-name
+    # findings block generation — other lints (unused import, etc.) are ignored.
+    try:
+        from pyflakes.checker import Checker
+        from pyflakes.messages import UndefinedName, UndefinedLocal
+        result = Checker(tree, filename='<user_code>')
+        for m in result.messages:
+            if isinstance(m, (UndefinedName, UndefinedLocal)):
+                return f"{m.message % m.message_args} (line {m.lineno})"
+    except Exception:
+        pass  # if pyflakes is unavailable, fall back to syntax-only checking
+
+    return None
 
 
 def lambda_handler(event, context):
