@@ -18,7 +18,7 @@ const ProcessingState = ({ onCancel }) => {
   const [idx, setIdx] = useState(0);
 
   useEffect(() => {
-    const t = setInterval(() => setIdx((i) => (i + 1) % MESSAGES.length), 3000);
+    const t = setInterval(() => setIdx((i) => (i + 1) % MESSAGES.length), 10000);
     return () => clearInterval(t);
   }, []);
 

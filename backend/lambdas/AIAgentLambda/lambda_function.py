@@ -74,10 +74,10 @@ def _call_openai(system_prompt: str, user_message: str, schema: dict) -> dict:
     return json.loads(response.output_text)
 
 
-def _generate_scenes(user_code: str) -> list:
+def _generate_scenes(user_code: str, complexity: str) -> list:
     result = _call_openai(
         GENERATION_SYSTEM_PROMPT,
-        build_generation_user_message(user_code),
+        build_generation_user_message(user_code, complexity),
         GENERATION_SCHEMA,
     )
     scenes = result["scenes"]
@@ -118,16 +118,17 @@ def _remaining_ms(context) -> int:
 def lambda_handler(event, context):
     job_id = event.get("job_id")
     user_code = event.get("user_code")
+    complexity = event.get("complexity") or "balanced"
 
     if not user_code:
         raise ValueError("Missing user_code in event")
 
     logger.info(
-        "Job %s: generating scenes (model=%s, manim_available=%s, max_retries=%s)",
-        job_id, MODEL, MANIM_AVAILABLE, MAX_RETRIES,
+        "Job %s: generating scenes (model=%s, complexity=%s, manim_available=%s, max_retries=%s)",
+        job_id, MODEL, complexity, MANIM_AVAILABLE, MAX_RETRIES,
     )
 
-    scenes = _generate_scenes(user_code)
+    scenes = _generate_scenes(user_code, complexity)
     scenes.sort(key=lambda s: s["scene_id"])
     logger.info("Job %s: model produced %d scenes", job_id, len(scenes))
 

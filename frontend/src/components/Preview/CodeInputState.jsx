@@ -3,8 +3,15 @@ import Editor from '@monaco-editor/react';
 import { Copy } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
+// Requested explanation depth options, shown as a segmented control.
+const COMPLEXITY_OPTIONS = [
+  { id: 'high_level', label: 'High-level', hint: 'Short & big-picture' },
+  { id: 'balanced', label: 'Balanced', hint: 'Recommended' },
+  { id: 'detailed', label: 'Detailed', hint: 'Deep & thorough' },
+];
+
 const CodeInputState = ({ code, setCode, error, onGenerate }) => {
-  const { profile } = useApp();
+  const { profile, complexity, setComplexity } = useApp();
   const firstName = (profile.name || '').trim().split(' ')[0] || 'there';
   return (
     /* הסרנו את ה-group מהדיב הראשי והעברנו אותו למיכל העורך אם צריך */
@@ -19,15 +26,38 @@ const CodeInputState = ({ code, setCode, error, onGenerate }) => {
           </h1>
         </div>
         
-        {error && (
-          <div className="flex flex-col items-end gap-1">
+        <div className="flex flex-col items-end gap-2">
+          {error && (
             <div className="bg-red-500/10 flex items-center px-3 py-1 sm:px-4 sm:py-1.5 rounded-md border border-red-500/30 shadow-inner">
               <span className="text-[10px] sm:text-xs text-red-400 font-medium select-none">
                 Something went wrong — please try again
               </span>
             </div>
+          )}
+
+          {/* Explanation-depth selector (drives the generation prompt) */}
+          <div className="flex flex-col items-end gap-1">
+            <span className="text-[10px] sm:text-xs text-gray-500 font-medium uppercase tracking-wider">
+              Explanation depth
+            </span>
+            <div className="flex bg-[#1e1e1e] rounded-xl border border-white/10 p-1">
+              {COMPLEXITY_OPTIONS.map((opt) => (
+                <button
+                  key={opt.id}
+                  onClick={() => setComplexity(opt.id)}
+                  title={opt.hint}
+                  className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+                    complexity === opt.id
+                      ? 'bg-gradient-to-r from-[#6d28d9] to-[#4f46e5] text-white shadow'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
-        )}
+        </div>
       </div>
 
       {/* מיכל העורך - כאן הוספנו z-10 כדי שיהיה מעל התמונה */}

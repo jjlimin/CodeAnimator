@@ -12,12 +12,12 @@ logical sequence of short animated scenes with voice narration.
 
 ## Scene count and pacing — YOU decide the number of scenes
 - Narration is spoken at roughly 150 words per minute.
-- The TOTAL narration across all scenes must fit in 60 to 120 seconds
-  (90-300 words total). Simpler input code deserves fewer, shorter scenes —
-  going under 60 seconds is fine for trivial snippets; never exceed 120 seconds.
+- Follow the "Requested depth" directive in the user message for the target
+  total length and level of detail — it overrides any default duration.
 - Each scene should carry 10-30 seconds of narration (25-75 words).
-- Choose the optimal scene count for the complexity of the input: a 3-line
-  function might need only 2 scenes; a complex algorithm might need 6+.
+- Choose the optimal scene count for the requested depth and the complexity of
+  the input: a simple high-level pass might need only 2 scenes; a detailed
+  walkthrough of a complex algorithm might need 6+.
 
 ## Manim code requirements (each scene's `manim_code` value)
 - Self-contained: starts with `from manim import *` and defines exactly ONE
@@ -117,8 +117,31 @@ CORRECTION_SCHEMA = {
 }
 
 
-def build_generation_user_message(user_code: str) -> str:
-    return f"Explain this code:\n\n```python\n{user_code}\n```"
+# Requested-depth directives, chosen by the user in the UI. Controls the total
+# length and how deep the explanation goes. Default is "balanced".
+COMPLEXITY_DIRECTIVES = {
+    "high_level": (
+        "Requested depth: HIGH-LEVEL OVERVIEW. Focus on the big picture — the "
+        "code's overall purpose and the main idea. Keep it short: 2-3 scenes, "
+        "total narration 30-60 seconds. Avoid line-by-line detail and edge cases."
+    ),
+    "balanced": (
+        "Requested depth: BALANCED. Explain the key steps and how the code works "
+        "at a comfortable pace. Total narration 60-120 seconds; pick the scene "
+        "count that fits the input's complexity."
+    ),
+    "detailed": (
+        "Requested depth: DETAILED WALKTHROUGH. Go step by step through the logic, "
+        "how the data changes, and notable edge cases. Be thorough: use more "
+        "scenes as needed, total narration 120-180 seconds."
+    ),
+}
+DEFAULT_COMPLEXITY = "balanced"
+
+
+def build_generation_user_message(user_code: str, complexity: str = DEFAULT_COMPLEXITY) -> str:
+    directive = COMPLEXITY_DIRECTIVES.get(complexity, COMPLEXITY_DIRECTIVES[DEFAULT_COMPLEXITY])
+    return f"{directive}\n\nExplain this code:\n\n```python\n{user_code}\n```"
 
 
 def build_correction_user_message(user_code: str, failed_scenes: list) -> str:
