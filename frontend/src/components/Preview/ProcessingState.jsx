@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { XCircle } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
 
 const MESSAGES = [
   'Generating narration...',
@@ -15,23 +16,30 @@ const MESSAGES = [
 ];
 
 const ProcessingState = ({ onCancel }) => {
+  const { genPhase } = useApp();
+  const checking = genPhase === 'checking';
   const [idx, setIdx] = useState(0);
 
+  // Rotate the fun messages only while actually generating.
   useEffect(() => {
+    if (checking) return;
     const t = setInterval(() => setIdx((i) => (i + 1) % MESSAGES.length), 10000);
     return () => clearInterval(t);
-  }, []);
+  }, [checking]);
+
+  const heading = checking ? 'Checking your code...' : 'Generating your video...';
+  const message = checking ? 'Making sure it compiles ✅' : MESSAGES[idx];
 
   return (
     <div className="flex flex-col items-center space-y-8 animate-in fade-in zoom-in duration-500 w-full">
       <style>{`@keyframes ca-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}`}</style>
 
       <div className="text-left w-full mb-4">
-        <h2 className="text-5xl font-bold text-white mb-2">Generating your video...</h2>
+        <h2 className="text-5xl font-bold text-white mb-2">{heading}</h2>
         {/* Outer element floats gently; inner span slides in on every message change */}
         <p className="text-gray-400 text-xl italic" style={{ animation: 'ca-float 3s ease-in-out infinite' }}>
-          <span key={idx} className="inline-block animate-in fade-in slide-in-from-bottom-2 duration-500">
-            {MESSAGES[idx]}
+          <span key={message} className="inline-block animate-in fade-in slide-in-from-bottom-2 duration-500">
+            {message}
           </span>
         </p>
       </div>
@@ -39,8 +47,8 @@ const ProcessingState = ({ onCancel }) => {
       <div className="relative w-full aspect-video bg-gradient-to-br from-[#2d1b4e] to-[#121212] rounded-[2.5rem] flex flex-col items-center justify-center border border-white/10 shadow-[0_0_80px_-20px_rgba(139,92,246,0.5)]">
         <img src="/loading.svg" alt="loading" className="w-32 h-32 mb-4 animate-pulse" />
         <p className="text-2xl font-medium text-white tracking-wide">
-          <span key={idx} className="inline-block animate-in fade-in slide-in-from-bottom-2 duration-500">
-            {MESSAGES[idx]}
+          <span key={message} className="inline-block animate-in fade-in slide-in-from-bottom-2 duration-500">
+            {message}
           </span>
         </p>
       </div>
