@@ -16,13 +16,18 @@ async function authHeaders() {
   return headers;
 }
 
-// POST /job — start a new animation job. Returns { job_id, title, message }.
+// POST /job — start a new animation job.
 // `complexity` is the requested explanation depth ('high_level'|'balanced'|'detailed').
-export const generateVideo = async (code, complexity = 'balanced') => {
+// `mode` is optional: 'explain_bug' to make a video explaining broken code.
+// Returns { job_id, title, message } on success, OR { needs_choice, error } when
+// the code does not compile and no mode was chosen yet.
+export const generateVideo = async (code, complexity = 'balanced', mode = null) => {
+  const payload = { user_code: code, complexity };
+  if (mode) payload.mode = mode;
   const response = await fetch(`${BASE_URL}/job`, {
     method: 'POST',
     headers: await authHeaders(),
-    body: JSON.stringify({ user_code: code, complexity }),
+    body: JSON.stringify(payload),
   });
   if (!response.ok) {
     throw new Error(`API Error: ${response.status} - ${await response.text()}`);

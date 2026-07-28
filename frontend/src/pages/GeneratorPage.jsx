@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import ProcessingState from '../components/Preview/ProcessingState';
 import DoneState from '../components/Preview/DoneState';
 import CodeInputState from '../components/Preview/CodeInputState';
+import CodeErrorChoice from '../components/Preview/CodeErrorChoice';
 
 const GeneratorPage = () => {
   const { view, code, setCode, startGenerate, newVideo, cancelJob, videoUrl, currentTitle, renameJob, activeJobId } = useApp();
@@ -25,6 +26,8 @@ const GeneratorPage = () => {
           {view === 'idle' && (
             <CodeInputState code={code} setCode={setCode} onGenerate={startGenerate} />
           )}
+
+          {view === 'code_error' && <CodeErrorChoice />}
 
           {view === 'processing' && <ProcessingState onCancel={() => cancelJob(activeJobId)} />}
 
