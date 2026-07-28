@@ -21,7 +21,8 @@ export function AppProvider({ children }) {
   const [profile, setProfile] = useState({ name: '', email: '' });
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [jobs, setJobs] = useState([]);
-  const [view, setView] = useState('idle'); // idle | processing | done
+  const [view, setView] = useState('idle'); // idle | processing | done | code_error
+  const [codeError, setCodeError] = useState(''); // compile error when code is broken
   const [activeJobId, setActiveJobId] = useState(null);
   const [videoUrl, setVideoUrl] = useState(null);
   const [currentTitle, setCurrentTitle] = useState('');
@@ -117,11 +118,18 @@ export function AppProvider({ children }) {
     };
   }, [view, activeJobId, refreshJobs]);
 
-  const startGenerate = useCallback(async () => {
+  // mode = null (normal) | 'explain_bug' (make a video explaining broken code)
+  const runGenerate = useCallback(async (mode = null) => {
     setView('processing');
     setVideoUrl(null);
     try {
-      const data = await generateVideo(code, complexity);
+      const data = await generateVideo(code, complexity, mode);
+      // Broken code and no choice made yet -> show the choice screen.
+      if (data.needs_choice) {
+        setCodeError(data.error || 'Your code has an error.');
+        setView('code_error');
+        return;
+      }
       setActiveJobId(data.job_id);
       setCurrentTitle(data.title || '');
       refreshJobs();
@@ -130,6 +138,13 @@ export function AppProvider({ children }) {
       setView('idle');
     }
   }, [code, complexity, refreshJobs]);
+
+  const startGenerate = useCallback(() => runGenerate(null), [runGenerate]);
+  const generateExplainBug = useCallback(() => runGenerate('explain_bug'), [runGenerate]);
+  const backToEdit = useCallback(() => {
+    setCodeError('');
+    setView('idle');
+  }, []);
 
   // Open a job from the history sidebar.
   const openJob = useCallback(async (job) => {
@@ -203,7 +218,10 @@ export function AppProvider({ children }) {
     setCode,
     complexity,
     setComplexity,
+    codeError,
     startGenerate,
+    generateExplainBug,
+    backToEdit,
     openJob,
     renameJob,
     cancelJob,

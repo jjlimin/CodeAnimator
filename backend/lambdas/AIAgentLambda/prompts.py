@@ -144,6 +144,29 @@ def build_generation_user_message(user_code: str, complexity: str = DEFAULT_COMP
     return f"{directive}\n\nExplain this code:\n\n```python\n{user_code}\n```"
 
 
+def build_buggy_generation_user_message(
+    user_code: str, code_error: str, complexity: str = DEFAULT_COMPLEXITY
+) -> str:
+    """Generation message for broken/non-compiling code. The video must keep
+    showing the ORIGINAL broken code (never a rewritten/fixed version) and
+    explain how it could have been written so it would work."""
+    directive = COMPLEXITY_DIRECTIVES.get(complexity, COMPLEXITY_DIRECTIVES[DEFAULT_COMPLEXITY])
+    return (
+        f"{directive}\n\n"
+        "The following Python code does NOT compile / has an error:\n\n"
+        f"```python\n{user_code}\n```\n\n"
+        f"The error is: {code_error}\n\n"
+        "Create scenes that:\n"
+        "- Display the ORIGINAL broken code exactly as written (do NOT show a "
+        "rewritten or corrected version of the code on screen).\n"
+        "- Point out where and why it fails.\n"
+        "- Explain how it could have been written so that it would work "
+        "(describe the correction in the narration), while the broken code "
+        "stays on screen as the reference.\n"
+        "Keep it clear and educational."
+    )
+
+
 def build_correction_user_message(user_code: str, failed_scenes: list) -> str:
     """failed_scenes: list of dicts with scene_id, narration, manim_code, error."""
     parts = [

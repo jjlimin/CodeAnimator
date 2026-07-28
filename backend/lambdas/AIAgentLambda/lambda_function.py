@@ -33,6 +33,7 @@ from prompts import (
     GENERATION_SYSTEM_PROMPT,
     build_correction_user_message,
     build_generation_user_message,
+    build_buggy_generation_user_message,
 )
 from validator import MANIM_AVAILABLE, validate_scene
 
@@ -74,12 +75,13 @@ def _call_openai(system_prompt: str, user_message: str, schema: dict) -> dict:
     return json.loads(response.output_text)
 
 
-def _generate_scenes(user_code: str, complexity: str) -> list:
-    result = _call_openai(
-        GENERATION_SYSTEM_PROMPT,
-        build_generation_user_message(user_code, complexity),
-        GENERATION_SCHEMA,
-    )
+def _generate_scenes(user_code: str, complexity: str, mode=None, code_error=None) -> list:
+    # explain_bug: keep the broken code on screen and explain how to fix it.
+    if mode == "explain_bug":
+        user_message = build_buggy_generation_user_message(user_code, code_error or "", complexity)
+    else:
+        user_message = build_generation_user_message(user_code, complexity)
+    result = _call_openai(GENERATION_SYSTEM_PROMPT, user_message, GENERATION_SCHEMA)
     scenes = result["scenes"]
     if not scenes:
         raise ValueError("Model returned zero scenes")
@@ -119,16 +121,18 @@ def lambda_handler(event, context):
     job_id = event.get("job_id")
     user_code = event.get("user_code")
     complexity = event.get("complexity") or "balanced"
+    mode = event.get("mode")            # None | 'explain_bug'
+    code_error = event.get("code_error")
 
     if not user_code:
         raise ValueError("Missing user_code in event")
 
     logger.info(
-        "Job %s: generating scenes (model=%s, complexity=%s, manim_available=%s, max_retries=%s)",
-        job_id, MODEL, complexity, MANIM_AVAILABLE, MAX_RETRIES,
+        "Job %s: generating scenes (model=%s, complexity=%s, mode=%s, manim_available=%s, max_retries=%s)",
+        job_id, MODEL, complexity, mode, MANIM_AVAILABLE, MAX_RETRIES,
     )
 
-    scenes = _generate_scenes(user_code, complexity)
+    scenes = _generate_scenes(user_code, complexity, mode, code_error)
     scenes.sort(key=lambda s: s["scene_id"])
     logger.info("Job %s: model produced %d scenes", job_id, len(scenes))
 
