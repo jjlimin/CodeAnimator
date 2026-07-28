@@ -26,6 +26,7 @@ export function AppProvider({ children }) {
   const [videoUrl, setVideoUrl] = useState(null);
   const [currentTitle, setCurrentTitle] = useState('');
   const [code, setCode] = useState('# Paste your code here\nprint("Hello World!")');
+  const [complexity, setComplexity] = useState('balanced'); // high_level | balanced | detailed
 
   // Load the signed-in user's name/email for the greeting + sidebar.
   // Read from the ID token first — it carries `name`/`email` for BOTH email
@@ -120,7 +121,7 @@ export function AppProvider({ children }) {
     setView('processing');
     setVideoUrl(null);
     try {
-      const data = await generateVideo(code);
+      const data = await generateVideo(code, complexity);
       setActiveJobId(data.job_id);
       setCurrentTitle(data.title || '');
       refreshJobs();
@@ -128,7 +129,7 @@ export function AppProvider({ children }) {
       console.error('generate failed', e);
       setView('idle');
     }
-  }, [code, refreshJobs]);
+  }, [code, complexity, refreshJobs]);
 
   // Open a job from the history sidebar.
   const openJob = useCallback(async (job) => {
@@ -200,6 +201,8 @@ export function AppProvider({ children }) {
     currentTitle,
     code,
     setCode,
+    complexity,
+    setComplexity,
     startGenerate,
     openJob,
     renameJob,

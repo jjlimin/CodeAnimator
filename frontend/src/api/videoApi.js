@@ -17,11 +17,12 @@ async function authHeaders() {
 }
 
 // POST /job — start a new animation job. Returns { job_id, title, message }.
-export const generateVideo = async (code) => {
+// `complexity` is the requested explanation depth ('high_level'|'balanced'|'detailed').
+export const generateVideo = async (code, complexity = 'balanced') => {
   const response = await fetch(`${BASE_URL}/job`, {
     method: 'POST',
     headers: await authHeaders(),
-    body: JSON.stringify({ user_code: code }),
+    body: JSON.stringify({ user_code: code, complexity }),
   });
   if (!response.ok) {
     throw new Error(`API Error: ${response.status} - ${await response.text()}`);

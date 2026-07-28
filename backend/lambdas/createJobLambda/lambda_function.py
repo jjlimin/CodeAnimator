@@ -38,6 +38,8 @@ def lambda_handler(event, context):
         job_id = str(uuid.uuid4())
         user_id = get_user_id(event)
         title = (body.get('title') or '').strip() or default_title()
+        # Requested explanation depth from the UI; AIAgent uses it in the prompt.
+        complexity = body.get('complexity') or 'balanced'
         created_at = datetime.now(timezone.utc).isoformat()
 
         item = {
@@ -56,7 +58,7 @@ def lambda_handler(event, context):
             stepfunctions.start_execution(
                 stateMachineArn=STATE_MACHINE_ARN,
                 name=job_id,
-                input=json.dumps({"job_id": job_id, "user_code": user_code})
+                input=json.dumps({"job_id": job_id, "user_code": user_code, "complexity": complexity})
             )
 
         return {
