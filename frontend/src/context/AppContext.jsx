@@ -23,6 +23,7 @@ export function AppProvider({ children }) {
   const [jobs, setJobs] = useState([]);
   const [view, setView] = useState('idle'); // idle | processing | done | code_error
   const [codeError, setCodeError] = useState(''); // compile error when code is broken
+  const [genPhase, setGenPhase] = useState('generating'); // checking | generating
   const [activeJobId, setActiveJobId] = useState(null);
   const [videoUrl, setVideoUrl] = useState(null);
   const [currentTitle, setCurrentTitle] = useState('');
@@ -85,6 +86,7 @@ export function AppProvider({ children }) {
       if (active) {
         setActiveJobId(active.job_id);
         setCurrentTitle(active.title);
+        setGenPhase('generating'); // resuming a real job — skip the checking phase
         setView('processing');
       }
     })();
@@ -120,6 +122,8 @@ export function AppProvider({ children }) {
 
   // mode = null (normal) | 'explain_bug' (make a video explaining broken code)
   const runGenerate = useCallback(async (mode = null) => {
+    // Phase 1: validating the code (server compiles it) — show "Checking...".
+    setGenPhase('checking');
     setView('processing');
     setVideoUrl(null);
     try {
@@ -130,8 +134,10 @@ export function AppProvider({ children }) {
         setView('code_error');
         return;
       }
+      // Phase 2: a real job started -> switch to the fun generating messages.
       setActiveJobId(data.job_id);
       setCurrentTitle(data.title || '');
+      setGenPhase('generating');
       refreshJobs();
     } catch (e) {
       console.error('generate failed', e);
@@ -161,6 +167,7 @@ export function AppProvider({ children }) {
     } else if (ACTIVE_STATUSES.includes(job.status)) {
       setActiveJobId(job.job_id);
       setCurrentTitle(job.title);
+      setGenPhase('generating');
       setView('processing');
     }
   }, []);
@@ -212,6 +219,7 @@ export function AppProvider({ children }) {
     saveName,
     jobs,
     view,
+    genPhase,
     videoUrl,
     currentTitle,
     code,
