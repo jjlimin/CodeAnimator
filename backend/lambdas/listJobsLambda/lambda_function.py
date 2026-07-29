@@ -10,6 +10,7 @@ self-cleans the history on every load.
 """
 import json
 import boto3
+from datetime import datetime, timezone
 
 dynamodb = boto3.client('dynamodb')
 s3 = boto3.client('s3')
@@ -21,6 +22,19 @@ BUCKET_NAME = 'code-animator-media-bucket-2026'
 PRESIGN_EXPIRY_SECONDS = 3600
 EXEC_ARN_PREFIX = 'arn:aws:states:us-east-1:719246278807:execution:ai-code-animator-state-machine:'
 ACTIVE_STATUSES = ('PENDING', 'RUNNING')
+# Never treat a very fresh job as junk — its execution may not be queryable the
+# instant after it starts (avoids a race that would delete a real in-progress job).
+GRACE_SECONDS = 120
+
+
+def is_fresh(created_at):
+    try:
+        dt = datetime.fromisoformat(created_at)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - dt).total_seconds() < GRACE_SECONDS
+    except Exception:
+        return False
 
 
 def get_user_id(event):
@@ -82,12 +96,15 @@ def lambda_handler(event, context):
                 })
                 continue
 
-            if status in ACTIVE_STATUSES and execution_alive(job_id):
+            created_at = item.get('created_at', {}).get('S', '')
+            # Keep genuinely in-progress jobs (live execution) AND brand-new jobs
+            # whose execution may not be queryable yet.
+            if status in ACTIVE_STATUSES and (is_fresh(created_at) or execution_alive(job_id)):
                 jobs.append({
                     'job_id': job_id,
                     'title': item.get('title', {}).get('S', ''),
                     'status': status,
-                    'created_at': item.get('created_at', {}).get('S', ''),
+                    'created_at': created_at,
                     'video_url': '',
                 })
                 continue

@@ -106,9 +106,17 @@ export function AppProvider({ children }) {
           setCurrentTitle((t) => data.title || t);
           setView('done');
           refreshJobs();
+        } else if (data.status === 'FAILED') {
+          // The render failed (state machine Catch marked it FAILED).
+          setView('gen_failed');
+          refreshJobs();
         }
       } catch (e) {
         console.error('poll error', e);
+        // 404 = the job was removed (failed + cleaned) -> treat as failure.
+        if (!cancelled && String(e.message).includes('404')) {
+          setView('gen_failed');
+        }
       }
     };
 
