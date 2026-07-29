@@ -1,6 +1,7 @@
 import React from 'react';
 import { Search } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { filterForMascot } from '../mascotColors';
 import ProcessingState from '../components/Preview/ProcessingState';
 import DoneState from '../components/Preview/DoneState';
 import CodeInputState from '../components/Preview/CodeInputState';
@@ -8,13 +9,18 @@ import CodeErrorChoice from '../components/Preview/CodeErrorChoice';
 import GenFailed from '../components/Preview/GenFailed';
 
 const GeneratorPage = () => {
-  const { view, code, setCode, startGenerate, newVideo, cancelJob, videoUrl, currentTitle, renameJob, activeJobId } = useApp();
+  const { view, code, setCode, startGenerate, newVideo, cancelJob, videoUrl, currentTitle, renameJob, activeJobId, mascotColor } = useApp();
 
   return (
     <div className="flex flex-col h-full w-full">
       <header className="flex items-center justify-between mb-8 w-full">
         <div className="flex items-center gap-2">
-          <img src="/logo.svg" alt="Logo" className="w-8 h-8 object-contain" />
+          <img
+            src="/logo.svg"
+            alt="Logo"
+            className="w-8 h-8 object-contain transition-[filter] duration-300"
+            style={{ filter: filterForMascot(mascotColor) }}
+          />
           <span className="text-xl font-bold tracking-tight text-white font-sans">CodeAnimator</span>
         </div>
         <button className="text-gray-400 hover:text-white transition p-2">
