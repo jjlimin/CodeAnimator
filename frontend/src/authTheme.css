@@ -1,0 +1,233 @@
+/* Login screen redesign — "Spotlight card" (Option B) + Codima greeting (Option C).
+   Targets the Amplify Authenticator, which only renders [data-amplify-authenticator]
+   while signed OUT — so all of this applies to the login screen only. */
+
+[data-amplify-authenticator] {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  position: relative;
+  overflow-x: clip;
+  background:
+    radial-gradient(1200px 620px at 18% 8%, rgba(124, 58, 237, 0.38), transparent 60%),
+    radial-gradient(1000px 620px at 88% 92%, rgba(236, 72, 153, 0.30), transparent 60%),
+    radial-gradient(900px 600px at 60% 40%, rgba(34, 211, 238, 0.14), transparent 60%),
+    #0c0b12;
+
+  --amplify-components-authenticator-router-border-width: 0;
+  --amplify-components-authenticator-router-box-shadow: none;
+  --amplify-components-authenticator-form-padding: 0.6rem 1.75rem 0.85rem;
+  --amplify-components-tabs-item-padding-vertical: 0.5rem;
+  --amplify-components-fieldcontrol-padding-block-start: 0.4rem;
+  --amplify-components-fieldcontrol-padding-block-end: 0.4rem;
+  --amplify-components-fieldset-gap: 0.55rem;
+  --amplify-components-button-padding-block-start: 0.5rem;
+  --amplify-components-button-padding-block-end: 0.5rem;
+  --amplify-components-tabs-item-color: #8b86a8;
+  --amplify-components-tabs-item-active-color: #ffffff;
+  --amplify-components-tabs-item-active-border-color: #7c3aed;
+  --amplify-components-tabs-item-focus-color: #ffffff;
+  --amplify-components-tabs-item-hover-color: #ffffff;
+  --amplify-components-fieldcontrol-color: #f4f2fb;
+  --amplify-components-fieldcontrol-background-color: rgba(20, 18, 32, 0.85);
+  --amplify-components-fieldcontrol-border-color: rgba(255, 255, 255, 0.12);
+  --amplify-components-fieldcontrol-focus-border-color: #7c3aed;
+  --amplify-components-fieldcontrol-focus-box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.4);
+  --amplify-components-field-label-color: #c9c4e2;
+  --amplify-components-button-color: #f4f2fb;
+  --amplify-components-button-border-color: rgba(255, 255, 255, 0.16);
+  --amplify-components-button-hover-background-color: rgba(255, 255, 255, 0.06);
+  --amplify-components-button-hover-border-color: rgba(255, 255, 255, 0.3);
+  --amplify-components-heading-color: #f4f2fb;
+  --amplify-components-text-color: #a49fc0;
+}
+
+/* Two-column layout: big Codima brand panel on the left, login card on the right.
+   Fills the horizontal space and keeps the card short (no scroll). */
+[data-amplify-authenticator] [data-amplify-container] {
+  width: 100%;
+  max-width: 980px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 56px;
+}
+
+/* Animated aurora blobs, injected in the Header, clipped to the viewport. */
+.ca-aurora { position: fixed; inset: 0; overflow: hidden; z-index: 0; pointer-events: none; }
+.ca-blob { position: absolute; border-radius: 50%; filter: blur(66px); }
+.ca-blob1 {
+  width: 360px; height: 360px; background: #7c3aed; left: 6%; top: 2%; opacity: 0.55;
+  animation: ca-drift 11s ease-in-out infinite;
+}
+.ca-blob2 {
+  width: 320px; height: 320px; background: #ec4899; right: 4%; bottom: 4%; opacity: 0.5;
+  animation: ca-drift2 13s ease-in-out infinite;
+}
+
+@keyframes ca-drift { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(30px,-24px) scale(1.15); } }
+@keyframes ca-drift2 { 0%,100% { transform: translate(0,0) scale(1.1); } 50% { transform: translate(-32px,22px) scale(0.95); } }
+@keyframes ca-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+
+/* Card-flip transition between Sign In and Create Account.
+   Amplify unmounts the old tab panel and mounts a fresh one on switch, so this
+   fires on its own every time — no JS restart needed. Kept dramatic so it
+   clearly reads as a flipping card. */
+@keyframes ca-flip {
+  0%   { transform: perspective(1600px) rotateY(90deg) scale(0.92); opacity: 0; }
+  45%  { opacity: 1; }
+  100% { transform: perspective(1600px) rotateY(0deg) scale(1); opacity: 1; }
+}
+
+/* Codima brand panel (left column) — big mascot + greeting over the aurora. */
+.codima-login-header {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 0;
+  max-width: 420px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.codima-brand-visual {
+  position: relative;
+  margin-bottom: 6px;
+}
+/* Soft glow behind the mascot */
+.codima-brand-visual::before {
+  content: '';
+  position: absolute;
+  inset: -22%;
+  background: radial-gradient(circle at 50% 45%, rgba(124, 58, 237, 0.5), transparent 62%);
+  filter: blur(26px);
+  z-index: -1;
+}
+.codima-mascot {
+  width: 190px;
+  height: 190px;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 16px 34px rgba(0, 0, 0, 0.5));
+  animation: ca-bob 4s ease-in-out infinite;
+}
+.codima-greeting {
+  color: #ffffff;
+  font-size: 38px;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+.codima-name {
+  background: linear-gradient(90deg, #a78bfa, #ec4899);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.codima-sub {
+  color: #c3bee0;
+  font-size: 16px;
+  margin: 2px 0 0;
+}
+.codima-perks {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.codima-perks li {
+  color: #a49fc0;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+}
+
+/* The card -> frosted glass, flips on tab switch */
+[data-amplify-authenticator] [data-amplify-router] {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  width: 400px;
+  overflow: hidden;
+  background: rgba(28, 24, 45, 0.62);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 20px;
+  box-shadow: 0 30px 70px -20px rgba(124, 58, 237, 0.7);
+}
+
+[data-amplify-authenticator] .amplify-tabs__panel {
+  animation: ca-flip 0.6s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  transform-origin: 50% 50%;
+  transform-style: preserve-3d;
+  will-change: transform, opacity;
+}
+[data-amplify-authenticator] .amplify-tabs__item {
+  transition: color 0.25s ease, border-color 0.35s ease, background-color 0.25s ease;
+}
+
+/* Primary "Sign in" button -> brand gradient */
+[data-amplify-authenticator] .amplify-button--primary {
+  background: linear-gradient(90deg, #7c3aed, #4f46e5);
+  border: none;
+  box-shadow: 0 10px 30px -10px rgba(124, 58, 237, 0.8);
+  transition: filter 0.2s ease, transform 0.1s ease;
+}
+[data-amplify-authenticator] .amplify-button--primary:hover {
+  filter: brightness(1.1);
+  background: linear-gradient(90deg, #7c3aed, #4f46e5);
+}
+[data-amplify-authenticator] .amplify-button--primary:active { transform: scale(0.99); }
+
+/* "Continue with Google" -> white pill (kept compact so nothing scrolls) */
+[data-amplify-authenticator] .federated-sign-in-button {
+  background: #ffffff;
+  color: #25233a;
+  border: none;
+  font-weight: 600;
+  padding-block: 0.55rem;
+  min-height: 0;
+  transition: background 0.2s ease;
+}
+[data-amplify-authenticator] .federated-sign-in-button:hover { background: #eef0f6; color: #25233a; }
+
+/* Tighten field internals + the "or" divider so the card stays short. */
+[data-amplify-authenticator] .amplify-field { gap: 0.25rem; }
+[data-amplify-authenticator] .amplify-input { padding-block: 0.5rem; }
+[data-amplify-authenticator] .amplify-field__error-message { margin-top: 0.15rem; }
+[data-amplify-authenticator] .federated-sign-in-container { padding-bottom: 0.35rem; gap: 0.4rem; }
+[data-amplify-authenticator] .amplify-divider { margin: 0.35rem 0; }
+
+/* Links (Forgot password, etc.) */
+[data-amplify-authenticator] .amplify-button--link { color: #b9a6ff; }
+
+/* Narrow screens: stack the brand panel above the card, shrink the mascot. */
+@media (max-width: 900px) {
+  [data-amplify-authenticator] [data-amplify-container] {
+    flex-direction: column;
+    gap: 10px;
+    max-width: 420px;
+  }
+  .codima-login-header {
+    max-width: none;
+    align-items: center;
+    text-align: center;
+  }
+  .codima-mascot { width: 80px; height: 80px; }
+  .codima-greeting { font-size: 24px; }
+  .codima-perks { display: none; }
+  [data-amplify-authenticator] [data-amplify-router] { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ca-blob, .codima-mascot,
+  [data-amplify-authenticator] .amplify-tabs__panel { animation: none; }
+}
