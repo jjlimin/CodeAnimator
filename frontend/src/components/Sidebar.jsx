@@ -9,6 +9,7 @@ import {
   Check,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { MASCOT_COLORS } from '../mascotColors';
 
 const StatusDot = ({ status }) => {
   const color =
@@ -19,7 +20,7 @@ const StatusDot = ({ status }) => {
 };
 
 const Sidebar = () => {
-  const { profile, jobs, openJob, renameJob, newVideo, signOut } = useApp();
+  const { profile, jobs, openJob, renameJob, newVideo, signOut, mascotColor, saveMascotColor } = useApp();
   const [isOpen, setIsOpen] = useState(true);
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState('');
@@ -122,6 +123,29 @@ const Sidebar = () => {
           ))}
         </div>
       </div>
+
+      {isOpen && (
+        <div className="px-4 pt-3 pb-1 border-t border-white/5">
+          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Codima color</h3>
+          <div className="flex items-center gap-2">
+            {MASCOT_COLORS.map((c) => {
+              const active = c.key === mascotColor;
+              return (
+                <button
+                  key={c.key}
+                  onClick={() => saveMascotColor(c.key)}
+                  aria-label={c.label}
+                  title={c.label}
+                  className={`w-6 h-6 rounded-full transition-all active:scale-90 ${
+                    active ? 'ring-2 ring-white ring-offset-2 ring-offset-[#1a1a1a] scale-110' : 'hover:scale-110 opacity-80 hover:opacity-100'
+                  }`}
+                  style={{ backgroundColor: c.swatch }}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="p-2 border-t border-white/5">
         <button

@@ -8,6 +8,11 @@ import {
   renameJob as apiRenameJob,
   cancelJob as apiCancelJob,
 } from '../api/videoApi';
+import { DEFAULT_MASCOT_COLOR, isMascotColor } from '../mascotColors';
+
+// Per-user localStorage key for the mascot color (source of truth; a copy is
+// also best-effort mirrored to Cognito `zoneinfo` for cross-device sync).
+const colorKey = (email) => `codima_mascot_color:${email || 'anon'}`;
 
 const AppContext = createContext(null);
 export const useApp = () => useContext(AppContext);
@@ -20,6 +25,8 @@ export function AppProvider({ children }) {
 
   const [profile, setProfile] = useState({ name: '', email: '' });
   const [profileLoaded, setProfileLoaded] = useState(false);
+  const [mascotColor, setMascotColor] = useState(DEFAULT_MASCOT_COLOR);
+  const [mascotColorChosen, setMascotColorChosen] = useState(false);
   const [jobs, setJobs] = useState([]);
   const [view, setView] = useState('idle'); // idle | processing | done | code_error
   const [codeError, setCodeError] = useState(''); // compile error when code is broken
@@ -39,25 +46,39 @@ export function AppProvider({ children }) {
     (async () => {
       let name = '';
       let email = '';
+      let zoneinfo = ''; // repurposed to hold the mascot color (see saveMascotColor)
       try {
         const session = await fetchAuthSession();
         const claims = session.tokens?.idToken?.payload || {};
         name = claims.name || '';
         email = claims.email || '';
+        zoneinfo = claims.zoneinfo || '';
       } catch { /* ignore */ }
-      if (!name || !email) {
+      if (!name || !email || !zoneinfo) {
         try {
           const a = await fetchUserAttributes();
           name = name || a.name || '';
           email = email || a.email || '';
+          zoneinfo = zoneinfo || a.zoneinfo || '';
         } catch { /* ignore */ }
       }
       setProfile({ name, email });
+
+      // Resolve the mascot color: Cognito (zoneinfo) if valid, else localStorage.
+      let stored = '';
+      try { stored = localStorage.getItem(colorKey(email)) || ''; } catch { /* ignore */ }
+      const resolved = isMascotColor(zoneinfo)
+        ? zoneinfo
+        : (isMascotColor(stored) ? stored : '');
+      setMascotColor(resolved || DEFAULT_MASCOT_COLOR);
+      setMascotColorChosen(!!resolved);
       setProfileLoaded(true);
     })();
   }, [user]);
 
-  const needsOnboarding = profileLoaded && !profile.name;
+  // Show onboarding until the user has both a name and a chosen mascot color.
+  // (Google users arrive with a name, so this is what surfaces the color step.)
+  const needsOnboarding = profileLoaded && (!profile.name || !mascotColorChosen);
 
   // Save the user's chosen name to Cognito (onboarding).
   const saveName = useCallback(async (name) => {
@@ -66,6 +87,19 @@ export function AppProvider({ children }) {
     await updateUserAttributes({ userAttributes: { name: clean } });
     setProfile((p) => ({ ...p, name: clean }));
   }, []);
+
+  // Save the mascot color. localStorage is the reliable store; we also mirror it
+  // to Cognito `zoneinfo` (an unused standard attribute) for cross-device sync —
+  // best-effort, since the pool client may not permit writing it.
+  const saveMascotColor = useCallback(async (color) => {
+    if (!isMascotColor(color)) return;
+    setMascotColor(color);
+    setMascotColorChosen(true);
+    try { localStorage.setItem(colorKey(profile.email), color); } catch { /* ignore */ }
+    try {
+      await updateUserAttributes({ userAttributes: { zoneinfo: color } });
+    } catch { /* pool may block it; localStorage still holds the choice */ }
+  }, [profile.email]);
 
   const refreshJobs = useCallback(async () => {
     try {
@@ -225,6 +259,9 @@ export function AppProvider({ children }) {
     profileLoaded,
     needsOnboarding,
     saveName,
+    mascotColor,
+    mascotColorChosen,
+    saveMascotColor,
     jobs,
     view,
     genPhase,
