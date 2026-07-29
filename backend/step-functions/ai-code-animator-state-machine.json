@@ -4,7 +4,16 @@
     "AIAgent": {
       "Type": "Task",
       "Resource": "arn:aws:lambda:us-east-1:719246278807:function:AIAgentLambda",
-      "Next": "RenderScenesMap"
+      "Next": "RenderScenesMap",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "MarkFailed"
+        }
+      ]
     },
     "RenderScenesMap": {
       "Type": "Map",
@@ -28,7 +37,9 @@
               "TaskDefinition": "ManimRenderTask",
               "NetworkConfiguration": {
                 "AwsvpcConfiguration": {
-                  "Subnets": ["subnet-05871bf0571840868"],
+                  "Subnets": [
+                    "subnet-05871bf0571840868"
+                  ],
                   "AssignPublicIp": "ENABLED"
                 }
               },
@@ -37,11 +48,26 @@
                   {
                     "Name": "manim-container",
                     "Environment": [
-                      { "Name": "JOB_ID", "Value.$": "$.job_id" },
-                      { "Name": "SCENE_ID", "Value.$": "States.Format('{}', $.scene_id)" },
-                      { "Name": "NARRATION", "Value.$": "$.narration" },
-                      { "Name": "MANIM_CODE", "Value.$": "$.manim_code" },
-                      { "Name": "OPENAI_API_KEY", "Value": "REPLACE_WITH_OPENAI_API_KEY" }
+                      {
+                        "Name": "JOB_ID",
+                        "Value.$": "$.job_id"
+                      },
+                      {
+                        "Name": "SCENE_ID",
+                        "Value.$": "States.Format('{}', $.scene_id)"
+                      },
+                      {
+                        "Name": "NARRATION",
+                        "Value.$": "$.narration"
+                      },
+                      {
+                        "Name": "MANIM_CODE",
+                        "Value.$": "$.manim_code"
+                      },
+                      {
+                        "Name": "OPENAI_API_KEY",
+                        "Value": "REPLACE_WITH_OPENAI_API_KEY"
+                      }
                     ]
                   }
                 ]
@@ -52,7 +78,16 @@
         }
       },
       "ResultPath": null,
-      "Next": "ConcatVideos"
+      "Next": "ConcatVideos",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "MarkFailed"
+        }
+      ]
     },
     "ConcatVideos": {
       "Type": "Task",
@@ -62,6 +97,26 @@
         "Payload.$": "$"
       },
       "OutputPath": "$.Payload",
+      "End": true,
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "MarkFailed"
+        }
+      ]
+    },
+    "MarkFailed": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:719246278807:function:markJobFailedLambda",
+        "Payload": {
+          "job_id.$": "$.job_id"
+        }
+      },
       "End": true
     }
   }
