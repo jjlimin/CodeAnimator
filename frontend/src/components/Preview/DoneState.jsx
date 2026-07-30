@@ -52,7 +52,7 @@ const DoneState = ({ videoUrl, title, code, onRename, onEdit }) => {
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && commit()}
-                  className="bg-[#1e1e1e] text-white rounded px-2 py-1 outline-none border border-purple-500/50 text-lg"
+                  className="bg-[#1e1e1e] text-white rounded px-2 py-1 outline-none border border-violet-500/50 text-lg"
                 />
                 <button onClick={commit} className="text-green-400 hover:text-green-300">
                   <Check size={20} />
@@ -63,7 +63,7 @@ const DoneState = ({ videoUrl, title, code, onRename, onEdit }) => {
                 <span className="truncate">{title || 'Untitled'}</span>
                 <button
                   onClick={() => setEditing(true)}
-                  className="text-gray-500 hover:text-purple-400 transition shrink-0"
+                  className="text-gray-500 hover:text-violet-400 transition shrink-0"
                   title="Rename"
                 >
                   <Pencil size={18} />

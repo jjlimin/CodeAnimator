@@ -24,6 +24,7 @@ import json
 import logging
 import os
 
+import boto3
 from openai import OpenAI
 
 from prompts import (
@@ -44,8 +45,10 @@ MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "3"))
 VALIDATION_TIMEOUT = int(os.environ.get("VALIDATION_TIMEOUT", "30"))
 TIME_BUFFER_MS = int(os.environ.get("TIME_BUFFER_MS", "20000"))
+TABLE_NAME = "CodeAnimatorJobs"
 
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+dynamodb = boto3.client("dynamodb")
 
 
 class SceneValidationError(Exception):
@@ -75,7 +78,7 @@ def _call_openai(system_prompt: str, user_message: str, schema: dict) -> dict:
     return json.loads(response.output_text)
 
 
-def _generate_scenes(user_code: str, complexity: str, mode=None, code_error=None) -> list:
+def _generate_scenes(user_code: str, complexity: str, mode=None, code_error=None) -> tuple:
     # explain_bug: keep the broken code on screen and explain how to fix it.
     if mode == "explain_bug":
         user_message = build_buggy_generation_user_message(user_code, code_error or "", complexity)
@@ -85,7 +88,28 @@ def _generate_scenes(user_code: str, complexity: str, mode=None, code_error=None
     scenes = result["scenes"]
     if not scenes:
         raise ValueError("Model returned zero scenes")
-    return scenes
+    # Generous safety cap only — the prompt asks for ~10-15 chars, this just
+    # guards against a runaway response, not the intended length.
+    title = (result.get("title") or "").strip()[:40]
+    return title, scenes
+
+
+def _save_title(job_id: str, title: str) -> None:
+    """Best-effort: persist the AI-generated title as soon as it's known, so
+    the frontend can show it while validation/rendering are still running —
+    replacing createJobLambda's placeholder date/time title. Must never fail
+    the job over a cosmetic write."""
+    if not title:
+        return
+    try:
+        dynamodb.update_item(
+            TableName=TABLE_NAME,
+            Key={"job_id": {"S": job_id}},
+            UpdateExpression="SET title = :t",
+            ExpressionAttributeValues={":t": {"S": title}},
+        )
+    except Exception:
+        logger.exception("Job %s: failed to save AI-generated title", job_id)
 
 
 def _validate_scenes(scenes: list) -> list:
@@ -132,9 +156,10 @@ def lambda_handler(event, context):
         job_id, MODEL, complexity, mode, MANIM_AVAILABLE, MAX_RETRIES,
     )
 
-    scenes = _generate_scenes(user_code, complexity, mode, code_error)
+    title, scenes = _generate_scenes(user_code, complexity, mode, code_error)
     scenes.sort(key=lambda s: s["scene_id"])
-    logger.info("Job %s: model produced %d scenes", job_id, len(scenes))
+    logger.info("Job %s: model produced %d scenes, title=%r", job_id, len(scenes), title)
+    _save_title(job_id, title)
 
     scenes_by_id = {s["scene_id"]: s for s in scenes}
     failed = _validate_scenes(scenes)
@@ -178,4 +203,4 @@ def lambda_handler(event, context):
         "Job %s: all %d scenes validated after %d correction rounds",
         job_id, len(scenes), rounds,
     )
-    return {"scenes": scenes, "job_id": job_id}
+    return {"scenes": scenes, "job_id": job_id, "title": title}

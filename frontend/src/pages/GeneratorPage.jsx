@@ -1,5 +1,4 @@
 import React from 'react';
-import { Search } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { filterForMascot } from '../mascotColors';
 import ProcessingState from '../components/Preview/ProcessingState';
@@ -23,9 +22,6 @@ const GeneratorPage = () => {
           />
           <span className="text-xl font-bold tracking-tight text-white font-sans">CodeAnimator</span>
         </div>
-        <button className="text-gray-400 hover:text-white transition p-2">
-          <Search size={20} />
-        </button>
       </header>
 
       <div className="flex-1 flex flex-col items-center justify-center w-full">

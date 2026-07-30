@@ -135,16 +135,20 @@ export function AppProvider({ children }) {
       try {
         const data = await checkStatus(activeJobId);
         if (cancelled) return;
+        // The AI-generated title lands mid-processing (from the first OpenAI
+        // call), replacing createJobLambda's placeholder date/time title —
+        // reflect it as soon as it shows up, not just once the job is done.
+        if (data.title) {
+          setCurrentTitle((t) => (data.title !== t ? data.title : t));
+        }
         if (data.status === 'COMPLETED' && data.video_url) {
           setVideoUrl(data.video_url);
-          setCurrentTitle((t) => data.title || t);
           setView('done');
-          refreshJobs();
         } else if (data.status === 'FAILED') {
           // The render failed (state machine Catch marked it FAILED).
           setView('gen_failed');
-          refreshJobs();
         }
+        refreshJobs();
       } catch (e) {
         console.error('poll error', e);
         // 404 = the job was removed (failed + cleaned) -> treat as failure.
