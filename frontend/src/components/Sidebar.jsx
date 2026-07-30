@@ -45,7 +45,7 @@ const Sidebar = () => {
       <div className={`p-4 flex items-center ${isOpen ? 'justify-between' : 'justify-center'} mb-6`}>
         {isOpen && (
           <div className="flex items-center gap-3 animate-in fade-in duration-300 min-w-0">
-            <div className="text-purple-400 shrink-0">
+            <div className="text-violet-400 shrink-0">
               <UserCircle size={32} />
             </div>
             <span className="font-semibold text-white truncate" title={profile.email}>
@@ -67,7 +67,7 @@ const Sidebar = () => {
           className={`w-full flex items-center ${isOpen ? 'justify-start px-4' : 'justify-center'} py-3 hover:bg-white/5 rounded-xl transition-all group`}
           title={!isOpen ? 'New Video' : ''}
         >
-          <span className={`${isOpen ? 'mr-3' : ''} text-gray-400 group-hover:text-purple-400 transition-colors`}>
+          <span className={`${isOpen ? 'mr-3' : ''} text-gray-400 group-hover:text-violet-400 transition-colors`}>
             <PlusCircle size={20} />
           </span>
           {isOpen && <span className="text-sm font-medium">New Video</span>}
@@ -99,7 +99,7 @@ const Sidebar = () => {
                     onChange={(e) => setDraft(e.target.value)}
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.key === 'Enter' && commitEdit(job.job_id)}
-                    className="flex-1 min-w-0 bg-[#2a2a2a] text-sm text-white rounded px-2 py-1 outline-none border border-purple-500/50"
+                    className="flex-1 min-w-0 bg-[#2a2a2a] text-sm text-white rounded px-2 py-1 outline-none border border-violet-500/50"
                   />
                   <button onClick={(e) => { e.stopPropagation(); commitEdit(job.job_id); }} className="text-green-400 hover:text-green-300 shrink-0">
                     <Check size={16} />
@@ -112,7 +112,7 @@ const Sidebar = () => {
                   </span>
                   <button
                     onClick={(e) => startEdit(job, e)}
-                    className="text-gray-600 hover:text-purple-400 opacity-0 group-hover:opacity-100 transition shrink-0"
+                    className="text-gray-600 hover:text-violet-400 opacity-0 group-hover:opacity-100 transition shrink-0"
                     title="Rename"
                   >
                     <Pencil size={14} />

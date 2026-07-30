@@ -28,7 +28,7 @@ const CodeErrorChoice = () => {
       <div className="flex flex-col sm:flex-row gap-4 w-full">
         <button
           onClick={generateExplainBug}
-          className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-[#6d28d9] to-[#4f46e5] hover:brightness-125 text-white px-6 py-4 rounded-2xl font-bold text-lg transition-all shadow-[0_10px_50px_-10px_rgba(109,40,217,0.7)] active:scale-95"
+          className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-[#EA6F22] to-[#d35f1c] hover:brightness-125 text-white px-6 py-4 rounded-2xl font-bold text-lg transition-all shadow-[0_10px_50px_-10px_rgba(234,111,34,0.7)] active:scale-95"
         >
           <Film size={20} /> Explain what's wrong (video)
         </button>

@@ -38,7 +38,7 @@ const Onboarding = () => {
           onSubmit={submitName}
           className="w-full max-w-md flex flex-col items-center text-center gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500"
         >
-          <div className="text-purple-400">
+          <div className="text-violet-400">
             <Sparkles size={48} />
           </div>
           <div>
@@ -51,13 +51,13 @@ const Onboarding = () => {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Your name"
-            className="w-full bg-[#1e1e1e] border border-white/10 focus:border-purple-500/60 outline-none rounded-2xl px-5 py-4 text-lg text-center transition-all"
+            className="w-full bg-[#1e1e1e] border border-white/10 focus:border-violet-500/60 outline-none rounded-2xl px-5 py-4 text-lg text-center transition-all"
           />
 
           <button
             type="submit"
             disabled={!name.trim()}
-            className="w-full bg-gradient-to-r from-[#6d28d9] to-[#4f46e5] hover:brightness-125 disabled:opacity-40 disabled:cursor-not-allowed text-white px-8 py-4 rounded-2xl font-bold text-lg transition-all shadow-[0_10px_50px_-10px_rgba(109,40,217,0.7)] active:scale-95 flex items-center justify-center gap-2"
+            className="w-full bg-gradient-to-r from-[#EA6F22] to-[#d35f1c] hover:brightness-125 disabled:opacity-40 disabled:cursor-not-allowed text-white px-8 py-4 rounded-2xl font-bold text-lg transition-all shadow-[0_10px_50px_-10px_rgba(234,111,34,0.7)] active:scale-95 flex items-center justify-center gap-2"
           >
             Continue <ArrowRight size={20} />
           </button>
@@ -115,7 +115,7 @@ const Onboarding = () => {
             type="button"
             onClick={finish}
             disabled={saving}
-            className="w-full bg-gradient-to-r from-[#6d28d9] to-[#4f46e5] hover:brightness-125 disabled:opacity-40 disabled:cursor-not-allowed text-white px-8 py-4 rounded-2xl font-bold text-lg transition-all shadow-[0_10px_50px_-10px_rgba(109,40,217,0.7)] active:scale-95 flex items-center justify-center gap-2"
+            className="w-full bg-gradient-to-r from-[#EA6F22] to-[#d35f1c] hover:brightness-125 disabled:opacity-40 disabled:cursor-not-allowed text-white px-8 py-4 rounded-2xl font-bold text-lg transition-all shadow-[0_10px_50px_-10px_rgba(234,111,34,0.7)] active:scale-95 flex items-center justify-center gap-2"
           >
             {saving ? 'Setting up...' : (<>Let's animate some code <ArrowRight size={20} /></>)}
           </button>

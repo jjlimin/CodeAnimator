@@ -38,6 +38,12 @@ logical sequence of short animated scenes with voice narration.
   validation before rendering.
 
 Return the scenes in narrative order with sequential integer `scene_id` starting at 1.
+
+## Video title
+Also produce a short `title` for this video: 10-15 characters, in English,
+Title Case, no trailing punctuation, naming what the code does (e.g.
+"Bubble Sort", "Fibonacci Calc", "Login Flow"). This is what shows up in the
+user's video list, so favor a short recognizable label over a full description.
 """
 
 GENERATION_SCHEMA = {
@@ -47,6 +53,7 @@ GENERATION_SCHEMA = {
     "schema": {
         "type": "object",
         "properties": {
+            "title": {"type": "string"},
             "scenes": {
                 "type": "array",
                 "items": {
@@ -61,7 +68,7 @@ GENERATION_SCHEMA = {
                 },
             }
         },
-        "required": ["scenes"],
+        "required": ["title", "scenes"],
         "additionalProperties": False,
     },
 }
