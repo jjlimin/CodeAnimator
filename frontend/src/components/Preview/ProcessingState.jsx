@@ -33,16 +33,8 @@ const ProcessingState = ({ onCancel }) => {
 
   return (
     <div className="flex flex-col items-center space-y-8 animate-in fade-in zoom-in duration-500 w-full">
-      <style>{`@keyframes ca-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}`}</style>
-
       <div className="text-left w-full mb-4">
         <h2 className="text-5xl font-bold text-white mb-2">{heading}</h2>
-        {/* Outer element floats gently; inner span slides in on every message change */}
-        <p className="text-gray-400 text-xl italic" style={{ animation: 'ca-float 3s ease-in-out infinite' }}>
-          <span key={message} className="inline-block animate-in fade-in slide-in-from-bottom-2 duration-500">
-            {message}
-          </span>
-        </p>
       </div>
 
       <div className="relative w-full aspect-video bg-gradient-to-br from-[#2d1b4e] to-[#121212] rounded-[2.5rem] flex flex-col items-center justify-center border border-white/10 shadow-[0_0_80px_-20px_rgba(139,92,246,0.5)]">
