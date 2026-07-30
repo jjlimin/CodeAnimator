@@ -36,6 +36,7 @@ const components = {
           <ul className="codima-perks" aria-hidden="true">
             <li>✦ Paste your code</li>
             <li>✦ Get a narrated animation</li>
+            <li>✦ Python for now, more soon</li>
           </ul>
         </div>
       </>

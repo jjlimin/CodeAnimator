@@ -30,6 +30,7 @@ const CodeInputState = ({ code, setCode, error, onGenerate }) => {
           <h1 className="text-3xl sm:text-5xl font-bold mt-1 text-white tracking-tight">
             Paste your code here
           </h1>
+          <p className="text-gray-500 text-xs sm:text-sm mt-1">Python only, for now</p>
         </div>
         
         <div className="flex flex-col items-end gap-2">
