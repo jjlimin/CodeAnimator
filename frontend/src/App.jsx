@@ -6,11 +6,14 @@ import Onboarding from './components/Onboarding';
 import './index.css';
 
 function Shell() {
-  const { profileLoaded, needsOnboarding } = useApp();
+  const { profileLoaded, jobsLoaded, needsOnboarding } = useApp();
 
   // Avoid a flash of the wrong screen before the profile has loaded.
   if (!profileLoaded) return <div className="h-screen w-full bg-[#121212]" />;
   if (needsOnboarding) return <Onboarding />;
+  // Avoid a flash of the empty "idle" screen before we know whether there's
+  // a job to resume (e.g. still generating) — that check happens async.
+  if (!jobsLoaded) return <div className="h-screen w-full bg-[#121212]" />;
 
   return (
     <MainLayout>

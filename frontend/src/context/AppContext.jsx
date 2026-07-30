@@ -28,6 +28,7 @@ export function AppProvider({ children }) {
   const [mascotColor, setMascotColor] = useState(DEFAULT_MASCOT_COLOR);
   const [mascotColorChosen, setMascotColorChosen] = useState(false);
   const [jobs, setJobs] = useState([]);
+  const [jobsLoaded, setJobsLoaded] = useState(false);
   const [view, setView] = useState('idle'); // idle | processing | done | code_error
   const [codeError, setCodeError] = useState(''); // compile error when code is broken
   const [genPhase, setGenPhase] = useState('generating'); // checking | generating
@@ -113,6 +114,9 @@ export function AppProvider({ children }) {
   }, []);
 
   // On load: fetch history and resume any job still in progress (refresh fix).
+  // jobsLoaded gates the app's first render (see App.jsx) so the user never
+  // sees a flash of the empty "idle" screen before this resolves and jumps
+  // them into the job they were actually in.
   useEffect(() => {
     (async () => {
       const list = await refreshJobs();
@@ -123,6 +127,7 @@ export function AppProvider({ children }) {
         setGenPhase('generating'); // resuming a real job — skip the checking phase
         setView('processing');
       }
+      setJobsLoaded(true);
     })();
   }, [refreshJobs]);
 
@@ -283,6 +288,7 @@ export function AppProvider({ children }) {
   const value = {
     profile,
     profileLoaded,
+    jobsLoaded,
     needsOnboarding,
     saveName,
     mascotColor,
