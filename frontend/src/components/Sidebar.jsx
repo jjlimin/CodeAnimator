@@ -7,6 +7,8 @@ import {
   Folder,
   Pencil,
   Check,
+  Trash2,
+  X,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { MASCOT_COLORS } from '../mascotColors';
@@ -20,10 +22,11 @@ const StatusDot = ({ status }) => {
 };
 
 const Sidebar = () => {
-  const { profile, jobs, openJob, renameJob, newVideo, signOut, mascotColor, saveMascotColor } = useApp();
+  const { profile, jobs, openJob, renameJob, deleteJob, newVideo, signOut, mascotColor, saveMascotColor } = useApp();
   const [isOpen, setIsOpen] = useState(true);
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState('');
+  const [deletingId, setDeletingId] = useState(null);
 
   const startEdit = (job, e) => {
     e.stopPropagation();
@@ -105,6 +108,24 @@ const Sidebar = () => {
                     <Check size={16} />
                   </button>
                 </>
+              ) : deletingId === job.job_id ? (
+                <>
+                  <span className="text-sm truncate flex-1 text-red-400">Delete this video?</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); deleteJob(job.job_id); setDeletingId(null); }}
+                    className="text-red-400 hover:text-red-300 shrink-0"
+                    title="Confirm delete"
+                  >
+                    <Check size={16} />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setDeletingId(null); }}
+                    className="text-gray-500 hover:text-gray-300 shrink-0"
+                    title="Cancel"
+                  >
+                    <X size={16} />
+                  </button>
+                </>
               ) : (
                 <>
                   <span className="text-sm truncate flex-1 text-gray-400 group-hover:text-white">
@@ -116,6 +137,13 @@ const Sidebar = () => {
                     title="Rename"
                   >
                     <Pencil size={14} />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setDeletingId(job.job_id); }}
+                    className="text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition shrink-0"
+                    title="Delete"
+                  >
+                    <Trash2 size={14} />
                   </button>
                 </>
               )}

@@ -258,6 +258,28 @@ export function AppProvider({ children }) {
     }
   }, [activeJobId, refreshJobs]);
 
+  // Delete a job from the history list. Same DELETE /job endpoint as cancel —
+  // the backend stops the render if it's still active, or removes the S3
+  // media + row if it's a finished video. Unlike cancelJob (which targets
+  // "the job currently open"), this removes an arbitrary row from the list
+  // and only resets the view if that job happened to be the open one.
+  const deleteJob = useCallback(async (jobId) => {
+    setJobs((prev) => prev.filter((j) => j.job_id !== jobId));
+    setActiveJobId((cur) => {
+      if (cur !== jobId) return cur;
+      setView('idle');
+      setVideoUrl(null);
+      return null;
+    });
+    try {
+      await apiCancelJob(jobId);
+    } catch (e) {
+      console.error('delete failed', e);
+    } finally {
+      refreshJobs();
+    }
+  }, [refreshJobs]);
+
   const value = {
     profile,
     profileLoaded,
@@ -282,6 +304,7 @@ export function AppProvider({ children }) {
     openJob,
     renameJob,
     cancelJob,
+    deleteJob,
     newVideo,
     signOut,
     activeJobId,
