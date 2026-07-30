@@ -52,6 +52,7 @@ const formFields = {
   },
   signUp: {
     username: { placeholder: 'Enter here' },
+    email: { placeholder: 'Enter here' },
     password: { placeholder: 'Enter here' },
     confirm_password: { placeholder: 'Enter here' },
   },
