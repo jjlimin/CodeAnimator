@@ -159,6 +159,25 @@ def _check_lint(code: str) -> Optional[str]:
                     f"`{func_name}({kw.arg}=...)` (line {node.lineno}): {guidance}"
                 )
 
+    # Code mobject has no `.code` attribute in current ManimCE — models often
+    # hallucinate `code_mobject.code[i]` to reach individual lines (e.g. for
+    # SurroundingRectangle highlights). This crashes at render time with
+    # AttributeError, which the static checks above cannot catch since it is
+    # a runtime attribute lookup, not a call/kwarg — worth its own check.
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Subscript)
+            and isinstance(node.value, ast.Attribute)
+            and node.value.attr == "code"
+        ):
+            errors.append(
+                f"`.code[...]` (line {node.lineno}): Code mobject has no `.code` "
+                "attribute in current ManimCE — do not index into a Code "
+                "mobject's lines this way. Build separate Text/Paragraph "
+                "mobjects instead if individual lines need to be referenced "
+                "or highlighted."
+            )
+
     if errors:
         return "Static Manim lint failed:\n" + "\n".join(f"- {e}" for e in errors)
     return None

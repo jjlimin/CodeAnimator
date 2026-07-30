@@ -146,6 +146,10 @@ export function AppProvider({ children }) {
         if (data.title) {
           setCurrentTitle((t) => (data.title !== t ? data.title : t));
         }
+        // Restores the code that actually produced this job, covering the
+        // "still processing" job resumed after a page refresh — the editor
+        // buffer otherwise still holds whatever was last typed, not this job's.
+        if (data.user_code) setCode(data.user_code);
         if (data.status === 'COMPLETED' && data.video_url) {
           setVideoUrl(data.video_url);
           setView('done');
@@ -211,6 +215,9 @@ export function AppProvider({ children }) {
         setActiveJobId(job.job_id);
         setVideoUrl(data.video_url);
         setCurrentTitle(data.title || job.title);
+        // Older jobs (created before this was stored) have no user_code —
+        // leave the editor buffer alone rather than blanking it out.
+        if (data.user_code) setCode(data.user_code);
         setView('done');
       } catch (e) {
         console.error('openJob failed', e);

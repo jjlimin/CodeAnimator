@@ -30,6 +30,10 @@ logical sequence of short animated scenes with voice narration.
   - The `Code` mobject signature changed in ManimCE 0.19:
     `Code(code_string="...", language="python", add_line_numbers=False)`.
     The kwargs `code`, `style`, `insert_line_no`, `font`, and `font_size` no longer exist.
+    It also has no `.code` attribute — never index into it like `code_mobject.code[i]`
+    to reach individual lines (e.g. to highlight one with SurroundingRectangle). If
+    individual lines need to be referenced, build them as separate Text/Paragraph
+    mobjects instead of relying on a Code mobject's internals.
 - Keep animations simple: Text, Code, MathTex, shapes, arrows, transforms,
   highlighting. No external files, no images, no SVGs, no network access.
 - The on-screen animation of a scene should roughly match its narration length
@@ -94,6 +98,8 @@ faithful to its narration. Rules:
 - The `Code` mobject signature changed in ManimCE 0.19:
   `Code(code_string="...", language="python", add_line_numbers=False)`.
   The kwargs `code`, `style`, `insert_line_no`, `font`, and `font_size` no longer exist.
+  It also has no `.code` attribute — never index into it like `code_mobject.code[i]`;
+  build separate Text/Paragraph mobjects instead if individual lines need referencing.
 - If an approach fundamentally cannot work, replace it with a simpler
   animation that conveys the same idea.
 """

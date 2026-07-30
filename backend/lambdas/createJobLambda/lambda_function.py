@@ -87,6 +87,9 @@ def lambda_handler(event, context):
             'status': {'S': 'PENDING'},
             'created_at': {'S': created_at},
             'title': {'S': title},
+            # Stored so DoneState can show the code that actually produced
+            # this job's video, instead of whatever's live in the editor now.
+            'user_code': {'S': user_code},
         }
         # Only set user_id when authenticated, so it lands in the GSI.
         if user_id:
