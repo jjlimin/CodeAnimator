@@ -43,11 +43,25 @@ const components = {
   },
 };
 
+// Same generic placeholder in every field, on both tabs — Amplify's default
+// "Enter your Email" / "Enter your Password" repeated the field's own label.
+const formFields = {
+  signIn: {
+    username: { placeholder: 'Enter here' },
+    password: { placeholder: 'Enter here' },
+  },
+  signUp: {
+    username: { placeholder: 'Enter here' },
+    password: { placeholder: 'Enter here' },
+    confirm_password: { placeholder: 'Enter here' },
+  },
+};
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ThemeProvider theme={theme} colorMode="dark">
       <Authenticator.Provider>
-        <Authenticator socialProviders={['google']} components={components}>
+        <Authenticator socialProviders={['google']} components={components} formFields={formFields}>
           <App />
         </Authenticator>
       </Authenticator.Provider>

@@ -1,6 +1,14 @@
 /* Login screen redesign — "Spotlight card" (Option B) + Codima greeting (Option C).
    Targets the Amplify Authenticator, which only renders [data-amplify-authenticator]
-   while signed OUT — so all of this applies to the login screen only. */
+   while signed OUT — so all of this applies to the login screen only.
+
+   Palette ("Molten violet") — max 2 accents, both keyed to the mascot's own
+   orange, each with a fixed role so they never compete:
+     #EA6F22 orange — brand / action: the mascot itself, the primary button,
+                       the "Codima" name gradient start.
+     #8b5cf6 violet — atmosphere / feedback: aurora wash, focus rings, the
+                       active tab, links, the card's ambient shadow.
+   Everything else is neutral (near-black bg, white/grey text). */
 
 [data-amplify-authenticator] {
   min-height: 100vh;
@@ -12,9 +20,7 @@
   position: relative;
   overflow-x: clip;
   background:
-    radial-gradient(1200px 620px at 18% 8%, rgba(124, 58, 237, 0.38), transparent 60%),
-    radial-gradient(1000px 620px at 88% 92%, rgba(236, 72, 153, 0.30), transparent 60%),
-    radial-gradient(900px 600px at 60% 40%, rgba(34, 211, 238, 0.14), transparent 60%),
+    radial-gradient(1400px 800px at 50% 30%, rgba(139, 92, 246, 0.12), transparent 65%),
     #0c0b12;
 
   --amplify-components-authenticator-router-border-width: 0;
@@ -28,14 +34,14 @@
   --amplify-components-button-padding-block-end: 0.5rem;
   --amplify-components-tabs-item-color: #8b86a8;
   --amplify-components-tabs-item-active-color: #ffffff;
-  --amplify-components-tabs-item-active-border-color: #7c3aed;
+  --amplify-components-tabs-item-active-border-color: #8b5cf6;
   --amplify-components-tabs-item-focus-color: #ffffff;
   --amplify-components-tabs-item-hover-color: #ffffff;
   --amplify-components-fieldcontrol-color: #f4f2fb;
   --amplify-components-fieldcontrol-background-color: rgba(20, 18, 32, 0.85);
   --amplify-components-fieldcontrol-border-color: rgba(255, 255, 255, 0.12);
-  --amplify-components-fieldcontrol-focus-border-color: #7c3aed;
-  --amplify-components-fieldcontrol-focus-box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.4);
+  --amplify-components-fieldcontrol-focus-border-color: #8b5cf6;
+  --amplify-components-fieldcontrol-focus-box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.4);
   --amplify-components-field-label-color: #c9c4e2;
   --amplify-components-button-color: #f4f2fb;
   --amplify-components-button-border-color: rgba(255, 255, 255, 0.16);
@@ -61,11 +67,11 @@
 .ca-aurora { position: fixed; inset: 0; overflow: hidden; z-index: 0; pointer-events: none; }
 .ca-blob { position: absolute; border-radius: 50%; filter: blur(66px); }
 .ca-blob1 {
-  width: 360px; height: 360px; background: #7c3aed; left: 6%; top: 2%; opacity: 0.55;
+  width: 360px; height: 360px; background: #EA6F22; left: 6%; top: 2%; opacity: 0.45;
   animation: ca-drift 11s ease-in-out infinite;
 }
 .ca-blob2 {
-  width: 320px; height: 320px; background: #ec4899; right: 4%; bottom: 4%; opacity: 0.5;
+  width: 320px; height: 320px; background: #8b5cf6; right: 4%; bottom: 4%; opacity: 0.5;
   animation: ca-drift2 13s ease-in-out infinite;
 }
 
@@ -93,18 +99,19 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 6px;
+  /* Single source of vertical rhythm — every gap below is this one value,
+     no per-element margins on top of it. */
+  gap: 14px;
 }
 .codima-brand-visual {
   position: relative;
-  margin-bottom: 6px;
 }
 /* Soft glow behind the mascot */
 .codima-brand-visual::before {
   content: '';
   position: absolute;
   inset: -22%;
-  background: radial-gradient(circle at 50% 45%, rgba(124, 58, 237, 0.5), transparent 62%);
+  background: radial-gradient(circle at 50% 45%, rgba(139, 92, 246, 0.5), transparent 62%);
   filter: blur(26px);
   z-index: -1;
 }
@@ -125,7 +132,7 @@
   margin: 0;
 }
 .codima-name {
-  background: linear-gradient(90deg, #a78bfa, #ec4899);
+  background: linear-gradient(90deg, #EA6F22, #8b5cf6);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -133,11 +140,11 @@
 .codima-sub {
   color: #c3bee0;
   font-size: 16px;
-  margin: 2px 0 0;
+  margin: 0;
 }
 .codima-perks {
   list-style: none;
-  margin: 14px 0 0;
+  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -161,7 +168,7 @@
   -webkit-backdrop-filter: blur(18px);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 20px;
-  box-shadow: 0 30px 70px -20px rgba(124, 58, 237, 0.7);
+  box-shadow: 0 30px 70px -20px rgba(139, 92, 246, 0.7);
 }
 
 [data-amplify-authenticator] .amplify-tabs__panel {
@@ -174,16 +181,16 @@
   transition: color 0.25s ease, border-color 0.35s ease, background-color 0.25s ease;
 }
 
-/* Primary "Sign in" button -> brand gradient */
+/* Primary "Sign in" button -> brand orange, ties back to the mascot */
 [data-amplify-authenticator] .amplify-button--primary {
-  background: linear-gradient(90deg, #7c3aed, #4f46e5);
+  background: linear-gradient(90deg, #EA6F22, #d35f1c);
   border: none;
-  box-shadow: 0 10px 30px -10px rgba(124, 58, 237, 0.8);
+  box-shadow: 0 10px 30px -10px rgba(234, 111, 34, 0.8);
   transition: filter 0.2s ease, transform 0.1s ease;
 }
 [data-amplify-authenticator] .amplify-button--primary:hover {
   filter: brightness(1.1);
-  background: linear-gradient(90deg, #7c3aed, #4f46e5);
+  background: linear-gradient(90deg, #EA6F22, #d35f1c);
 }
 [data-amplify-authenticator] .amplify-button--primary:active { transform: scale(0.99); }
 
@@ -207,7 +214,7 @@
 [data-amplify-authenticator] .amplify-divider { margin: 0.35rem 0; }
 
 /* Links (Forgot password, etc.) */
-[data-amplify-authenticator] .amplify-button--link { color: #b9a6ff; }
+[data-amplify-authenticator] .amplify-button--link { color: #a78bfa; }
 
 /* Narrow screens: stack the brand panel above the card, shrink the mascot. */
 @media (max-width: 900px) {
