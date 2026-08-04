@@ -14,6 +14,7 @@ Tiers (each runs only if the previous one passed):
 import ast
 import importlib.util
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -102,6 +103,14 @@ def _check_syntax(code: str) -> Optional[str]:
         return f"SyntaxError: {e.msg} (line {e.lineno}, offset {e.offset})\n  {e.text or ''}".rstrip()
 
 
+# Callables whose string arguments are LaTeX source, not plain text — the
+# argument MUST be a raw string, or Python's own escape processing corrupts
+# backslash-letter LaTeX commands (\frac, \nu, \tau, \alpha, \beta, \vee,
+# ...) before LaTeX ever sees them: \f/\n/\r/\t/\v/\a/\b are all real Python
+# escape sequences that silently eat the backslash.
+LATEX_CALLABLES = {"MathTex", "Tex", "SingleStringMathTex"}
+
+
 def _check_lint(code: str) -> Optional[str]:
     tree = ast.parse(code)
     errors = []
@@ -177,6 +186,31 @@ def _check_lint(code: str) -> Optional[str]:
                 "mobjects instead if individual lines need to be referenced "
                 "or highlighted."
             )
+
+    # MathTex/Tex string arguments must be raw strings (r"...") — a regular
+    # string silently mangles LaTeX commands like \frac, \nu, \tau via
+    # Python's own backslash-escape processing (confirmed root cause of a
+    # real render crash: \frac{...} became a form-feed + "rac{...}").
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        func_name = func.id if isinstance(func, ast.Name) else (
+            func.attr if isinstance(func, ast.Attribute) else None
+        )
+        if func_name not in LATEX_CALLABLES:
+            continue
+        for arg in node.args:
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                src = ast.get_source_segment(code, arg) or ""
+                if not re.match(r"^[rR]['\"]", src):
+                    errors.append(
+                        f"`{func_name}(...)` (line {node.lineno}): LaTeX string "
+                        "arguments must be raw strings, e.g. r\"\\frac{a}{b}\" — "
+                        "a plain string silently corrupts backslash-letter LaTeX "
+                        "commands (\\f, \\n, \\t, \\r, \\v, \\a, \\b are all real "
+                        "Python escape sequences) before LaTeX ever sees them."
+                    )
 
     if errors:
         return "Static Manim lint failed:\n" + "\n".join(f"- {e}" for e in errors)

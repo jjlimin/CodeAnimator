@@ -29,6 +29,12 @@ logical sequence of short animated scenes with voice narration.
   - `TextMobject` / `TexMobject` were removed — use `Text` / `MathTex` / `Tex`.
   - `GraphScene` was removed — use `Axes` inside a plain `Scene` and `axes.plot(...)`.
   - `FadeInFrom` / `FadeOutAndShift` were removed — use `FadeIn(m, shift=...)` / `FadeOut(m, shift=...)`.
+  - `MathTex(...)` / `Tex(...)` string arguments are LaTeX source and MUST be
+    raw strings: `MathTex(r"\frac{a}{b}")`, never `MathTex("\frac{a}{b}")`.
+    Without the `r` prefix, Python's own escape processing silently corrupts
+    backslash-letter LaTeX commands (`\frac`, `\nu`, `\tau`, `\alpha`, `\beta`,
+    `\vee`, ...) — `\f`, `\n`, `\r`, `\t`, `\v`, `\a`, `\b` are all real Python
+    escape sequences that eat the backslash before LaTeX ever sees it.
 - Keep animations simple: Text, MathTex, shapes, arrows, transforms,
   highlighting. No external files, no images, no SVGs, no network access.
 - The on-screen animation of a scene should roughly match its narration length
@@ -126,6 +132,10 @@ faithful to its narration. Rules:
   Scene subclass with a `construct` method.
 - Use only current ManimCE APIs (`Create` not `ShowCreation`, `Text`/`MathTex`
   not `TextMobject`/`TexMobject`, `Axes` not `GraphScene`, etc.).
+- `MathTex(...)`/`Tex(...)` string arguments MUST be raw strings, e.g.
+  `MathTex(r"\frac{a}{b}")` — a plain string corrupts backslash-letter LaTeX
+  commands via Python's own escape processing (this is a common real cause
+  of a "latex error converting to dvi" failure).
 - Never call `Code(...)` or otherwise build/reproduce the source code — all
   code display is handled automatically outside this correction step. If
   scene 1 is among the failed scenes, its fixed body must still be just
