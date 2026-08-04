@@ -41,6 +41,21 @@ logical sequence of short animated scenes with voice narration.
 - Code must be immediately runnable — it will be compiled and executed for
   validation before rendering.
 
+## Visual style — make it colorful and engaging
+- Use ManimCE's color palette deliberately instead of defaulting to plain
+  white-on-black: e.g. BLUE, TEAL, GOLD, PURPLE, GREEN, ORANGE, PINK, YELLOW,
+  or a specific shade (BLUE_C, TEAL_B, GOLD_D, ...).
+- Give distinct elements distinct colors to visually separate concepts —
+  e.g. variable names vs. their values, or the element currently being
+  discussed vs. everything else.
+- A muted dark background via `self.camera.background_color = "#1e1e2e"`
+  (or similar) often makes foreground colors read better than pure black.
+- Keep contrast high enough to stay readable — avoid low-contrast pairs
+  (e.g. dark blue on a dark background), and never rely on color alone to
+  convey information; pair it with position or a label too.
+- Vary the palette across scenes when the content differs, rather than
+  reusing the exact same two or three colors in every single scene.
+
 Return the scenes in narrative order with sequential integer `scene_id` starting at 1.
 
 ## Video title
@@ -102,6 +117,8 @@ faithful to its narration. Rules:
   build separate Text/Paragraph mobjects instead if individual lines need referencing.
 - If an approach fundamentally cannot work, replace it with a simpler
   animation that conveys the same idea.
+- Preserve the original scene's color choices where possible — don't quietly
+  revert to plain white-on-black while fixing an unrelated error.
 """
 
 CORRECTION_SCHEMA = {
