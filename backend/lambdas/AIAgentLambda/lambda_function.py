@@ -20,6 +20,7 @@ Environment variables:
   TIME_BUFFER_MS       min remaining Lambda time to start another round, default 20000
 """
 
+import ast
 import json
 import logging
 import os
@@ -35,6 +36,7 @@ from prompts import (
     build_correction_user_message,
     build_generation_user_message,
     build_buggy_generation_user_message,
+    inject_code_display,
 )
 from validator import MANIM_AVAILABLE, validate_scene
 
@@ -203,4 +205,20 @@ def lambda_handler(event, context):
         "Job %s: all %d scenes validated after %d correction rounds",
         job_id, len(scenes), rounds,
     )
+
+    # Deterministic post-processing: splice in the intro/step code display
+    # now that every scene's own content has passed validation — the
+    # self-correction loop never has to see or reason about this
+    # boilerplate. Sanity-checked with ast.parse since this step is not
+    # itself covered by the validator.
+    for scene in scenes:
+        scene["manim_code"] = inject_code_display(scene["manim_code"], user_code, scene)
+        try:
+            ast.parse(scene["manim_code"])
+        except SyntaxError as e:
+            raise RuntimeError(
+                f"Job {job_id}: code-display injection produced invalid "
+                f"syntax for scene {scene['scene_id']}: {e}"
+            ) from e
+
     return {"scenes": scenes, "job_id": job_id, "title": title}
