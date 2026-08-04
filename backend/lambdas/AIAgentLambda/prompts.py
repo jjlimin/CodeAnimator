@@ -1,7 +1,5 @@
 """System prompts and JSON schemas for the Manim scene-generation agent."""
 
-import textwrap
-
 # ---------------------------------------------------------------------------
 # Generation
 # ---------------------------------------------------------------------------
@@ -43,34 +41,6 @@ logical sequence of short animated scenes with voice narration.
 - Code must be immediately runnable — it will be compiled and executed for
   validation before rendering.
 
-## Visual style — make it colorful and engaging
-- Use ManimCE's color palette deliberately instead of defaulting to plain
-  white-on-black: e.g. BLUE, TEAL, GOLD, PURPLE, GREEN, ORANGE, PINK, YELLOW,
-  or a specific shade (BLUE_C, TEAL_B, GOLD_D, ...).
-- Give distinct elements distinct colors to visually separate concepts —
-  e.g. variable names vs. their values, or the element currently being
-  discussed vs. everything else.
-- A muted dark background via `self.camera.background_color = "#1e1e2e"`
-  (or similar) often makes foreground colors read better than pure black.
-- Keep contrast high enough to stay readable — avoid low-contrast pairs
-  (e.g. dark blue on a dark background), and never rely on color alone to
-  convey information; pair it with position or a label too.
-- Vary the palette across scenes when the content differs, rather than
-  reusing the exact same two or three colors in every single scene.
-
-## Code sidebar — reserve space, don't build it yourself
-The full user code is always shown as a persistent sidebar on the LEFT edge
-of the screen, in every scene, added automatically by the system — you do
-NOT write any code to display it yourself. Your job:
-- For each scene, set `active_lines` to the 1-indexed line number(s) — using
-  the line numbers shown in the numbered code below — that this scene's
-  narration is actually about. An empty list is fine for a scene that has no
-  single specific line (e.g. a pure title/overview scene).
-- Keep your OWN animation content (titles, explanations, diagrams, code
-  snippets you build yourself) in the right ~65% of the frame. Leave the
-  left portion of the screen empty — do not position your own mobjects at
-  the far left edge, since the code sidebar occupies it.
-
 Return the scenes in narrative order with sequential integer `scene_id` starting at 1.
 
 ## Video title
@@ -96,12 +66,8 @@ GENERATION_SCHEMA = {
                         "scene_id": {"type": "integer"},
                         "narration": {"type": "string"},
                         "manim_code": {"type": "string"},
-                        "active_lines": {
-                            "type": "array",
-                            "items": {"type": "integer"},
-                        },
                     },
-                    "required": ["scene_id", "narration", "manim_code", "active_lines"],
+                    "required": ["scene_id", "narration", "manim_code"],
                     "additionalProperties": False,
                 },
             }
@@ -136,10 +102,6 @@ faithful to its narration. Rules:
   build separate Text/Paragraph mobjects instead if individual lines need referencing.
 - If an approach fundamentally cannot work, replace it with a simpler
   animation that conveys the same idea.
-- Preserve the original scene's color choices where possible — don't quietly
-  revert to plain white-on-black while fixing an unrelated error.
-- Keep your content clear of the left ~35% of the frame — a code sidebar is
-  added there automatically after your fix, outside this correction step.
 """
 
 CORRECTION_SCHEMA = {
@@ -190,50 +152,30 @@ COMPLEXITY_DIRECTIVES = {
 DEFAULT_COMPLEXITY = "balanced"
 
 
-def _numbered_code(user_code: str) -> str:
-    """Line-numbered view of the user's code, shown to the model so it can
-    set each scene's `active_lines` accurately — the numbers correspond
-    exactly to a plain `user_code.split("\\n")` (1-indexed), matching how
-    the code sidebar is built."""
-    lines = user_code.split("\n")
-    width = len(str(len(lines)))
-    return "\n".join(f"{i:>{width}}  {line}" for i, line in enumerate(lines, start=1))
-
-
 def build_generation_user_message(user_code: str, complexity: str = DEFAULT_COMPLEXITY) -> str:
     directive = COMPLEXITY_DIRECTIVES.get(complexity, COMPLEXITY_DIRECTIVES[DEFAULT_COMPLEXITY])
-    return (
-        f"{directive}\n\n"
-        "Explain this code (line numbers below are for `active_lines` "
-        "reference only, not part of the source):\n\n"
-        f"```python\n{_numbered_code(user_code)}\n```"
-    )
+    return f"{directive}\n\nExplain this code:\n\n```python\n{user_code}\n```"
 
 
 def build_buggy_generation_user_message(
     user_code: str, code_error: str, complexity: str = DEFAULT_COMPLEXITY
 ) -> str:
-    """Generation message for broken/non-compiling code. The code sidebar
-    (added automatically) always shows the ORIGINAL broken code — the model
-    explains how it could have been written so it would work, and points
-    at the broken line(s) via active_lines rather than rendering the code
-    itself."""
+    """Generation message for broken/non-compiling code. The video must keep
+    showing the ORIGINAL broken code (never a rewritten/fixed version) and
+    explain how it could have been written so it would work."""
     directive = COMPLEXITY_DIRECTIVES.get(complexity, COMPLEXITY_DIRECTIVES[DEFAULT_COMPLEXITY])
     return (
         f"{directive}\n\n"
-        "The following Python code does NOT compile / has an error (line "
-        "numbers below are for `active_lines` reference only, not part of "
-        "the source):\n\n"
-        f"```python\n{_numbered_code(user_code)}\n```\n\n"
+        "The following Python code does NOT compile / has an error:\n\n"
+        f"```python\n{user_code}\n```\n\n"
         f"The error is: {code_error}\n\n"
         "Create scenes that:\n"
-        "- Point out where and why it fails, using `active_lines` to "
-        "highlight the broken line(s) in the code sidebar (added "
-        "automatically — do not render the code yourself).\n"
+        "- Display the ORIGINAL broken code exactly as written (do NOT show a "
+        "rewritten or corrected version of the code on screen).\n"
+        "- Point out where and why it fails.\n"
         "- Explain how it could have been written so that it would work "
-        "(describe the correction in the narration; do not display a "
-        "rewritten version of the code — the sidebar always shows the "
-        "original).\n"
+        "(describe the correction in the narration), while the broken code "
+        "stays on screen as the reference.\n"
         "Keep it clear and educational."
     )
 
@@ -254,89 +196,3 @@ def build_correction_user_message(user_code: str, failed_scenes: list) -> str:
             f"Validation error:\n```\n{scene['error']}\n```\n"
         )
     return "\n".join(parts)
-
-
-# ---------------------------------------------------------------------------
-# Code sidebar injection — deterministic, NOT LLM-authored.
-#
-# Applied once in AIAgentLambda after every scene's own content has already
-# passed validation/correction, so the self-correction loop never has to see
-# or reason about this boilerplate.
-#
-# Uses the real `Code` mobject (syntax highlighting, line numbers) rather
-# than plain Text — but NOT `.code[i]` to reach individual lines, which
-# doesn't exist in current ManimCE and crashed real renders earlier (see the
-# RENAMED_KWARGS/REMOVED_APIS notes above). The correct attribute, confirmed
-# by introspecting an actual Code instance locally (ManimCE 0.19.1), is
-# `.code_lines[i]` (0-indexed) — each entry is the VGroup for that source
-# line, usable directly with SurroundingRectangle-style positioning.
-#
-# Verified by real local render (not just ast.parse): a Code mobject's own
-# internal background must be added BEFORE the highlight rectangles, or the
-# highlight is hidden behind it — self.add(panel_bg, code_mob, *hl_rects),
-# highlights last so they sit visibly on top.
-#
-# Also verified: `.width` read AFTER move_to/align_to repositioning is
-# unreliable on a Code mobject (returned a stale/wrong value in testing,
-# while get_left()/get_right() stayed correct) — so the width used for the
-# highlight rectangles is captured once right after scaling, before any
-# repositioning, and reused as a fixed value rather than re-read later.
-# ---------------------------------------------------------------------------
-
-CONSTRUCT_MARKER = "def construct(self):"
-
-
-def build_code_panel_snippet(user_code: str, active_lines) -> str:
-    """Manim source (construct()-body statements) rendering `user_code` as an
-    always-visible left sidebar (a `Code` mobject), with `active_lines`
-    (1-indexed) highlighted. The background band always spans the full frame
-    height at a fixed width, regardless of how many lines the code has — so
-    it reads as one constant sidebar strip across every scene, not a box
-    that resizes per scene."""
-    src_lines = user_code.split("\n")
-    total = len(src_lines)
-    active = sorted({ln for ln in (active_lines or []) if isinstance(ln, int) and 1 <= ln <= total})
-    code_literal = repr(user_code)
-    active_literal = repr(set(active))
-    return textwrap.dedent(f"""\
-        __ca_full_code = {code_literal}
-        __ca_active = {active_literal}
-        __ca_panel_w = config.frame_width * 0.32
-        __ca_panel_h = config.frame_height - 0.4
-        __ca_panel_bg = Rectangle(
-            width=__ca_panel_w, height=__ca_panel_h,
-            fill_color="#1E1E2E", fill_opacity=0.92, stroke_color="#3A3A4A", stroke_width=1.5,
-        ).to_edge(LEFT, buff=0.2)
-        __ca_code = Code(
-            code_string=__ca_full_code, language="python",
-            add_line_numbers=True, paragraph_config={{"font_size": 16}},
-        )
-        if __ca_code.width > __ca_panel_w - 0.5:
-            __ca_code.scale_to_fit_width(__ca_panel_w - 0.5)
-        if __ca_code.height > __ca_panel_h - 0.5:
-            __ca_code.scale_to_fit_height(__ca_panel_h - 0.5)
-        __ca_code_w = __ca_code.width
-        __ca_code.move_to(__ca_panel_bg.get_top(), aligned_edge=UP).shift(DOWN * 0.3)
-        __ca_code.align_to(__ca_panel_bg, LEFT).shift(RIGHT * 0.25)
-        __ca_code_center_x = (__ca_code.get_left()[0] + __ca_code.get_right()[0]) / 2
-        __ca_hl_rects = [
-            Rectangle(width=__ca_code_w - 0.1, height=__ca_code.code_lines[i - 1].height + 0.08,
-                      fill_color="#FFD866", fill_opacity=0.22, stroke_width=0)
-            .move_to(__ca_code_center_x * RIGHT + __ca_code.code_lines[i - 1].get_center()[1] * UP)
-            for i in __ca_active
-        ]
-        self.add(__ca_panel_bg, __ca_code, *__ca_hl_rects)
-        """)
-
-
-def inject_code_panel(manim_code: str, user_code: str, active_lines) -> str:
-    """Splice the deterministic code-sidebar snippet right after
-    `def construct(self):` in a scene's manim_code. If the marker isn't
-    found (shouldn't happen — the lint tier requires a construct method),
-    the code is returned unchanged rather than raising."""
-    idx = manim_code.find(CONSTRUCT_MARKER)
-    if idx == -1:
-        return manim_code
-    insert_at = manim_code.index("\n", idx) + 1
-    snippet = textwrap.indent(build_code_panel_snippet(user_code, active_lines), " " * 8)
-    return manim_code[:insert_at] + snippet + manim_code[insert_at:]
