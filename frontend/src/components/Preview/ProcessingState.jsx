@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { XCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { filterForMascot } from '../../mascotColors';
+import Flashcard from './Flashcard';
 
 const MESSAGES = [
   'Generating narration...',
@@ -51,18 +52,18 @@ const ProcessingState = ({ onCancel }) => {
         </p>
       </div>
 
-      <div className="w-full bg-[#1e1e1e]/50 p-6 rounded-2xl border border-white/5 flex justify-between items-center opacity-60">
-        <div className="space-y-2">
-          <div className="h-2 w-48 bg-gray-700 rounded"></div>
-          <div className="h-2 w-64 bg-gray-800 rounded"></div>
+      {!checking && (
+        <div className="w-full bg-[#1e1e1e]/50 p-6 rounded-2xl border border-white/5">
+          <Flashcard />
         </div>
-        <button
-          onClick={onCancel}
-          className="bg-[#ef4444] hover:bg-red-600 text-white px-6 py-2 rounded-xl font-bold flex items-center gap-2 transition"
-        >
-          <XCircle size={20} /> Cancel
-        </button>
-      </div>
+      )}
+
+      <button
+        onClick={onCancel}
+        className="bg-[#ef4444] hover:bg-red-600 text-white px-6 py-2 rounded-xl font-bold flex items-center gap-2 transition self-end"
+      >
+        <XCircle size={20} /> Cancel
+      </button>
     </div>
   );
 };

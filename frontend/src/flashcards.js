@@ -1,0 +1,23 @@
+// Quick CS/programming trivia shown to the user while a video generates.
+export const FLASHCARDS = [
+  { q: 'What is an API?', a: 'A set of rules that lets different pieces of software talk to each other.' },
+  { q: 'Stack vs. Heap?', a: 'Stack: fast, fixed-size, used for function calls. Heap: flexible, manually managed memory.' },
+  { q: 'What is Big O notation?', a: "A way to describe how an algorithm's runtime grows as the input gets bigger." },
+  { q: 'What is recursion?', a: 'A function that calls itself to solve smaller instances of the same problem.' },
+  { q: 'What does DRY stand for?', a: "Don't Repeat Yourself — avoid duplicating logic." },
+  { q: 'What is a hash table?', a: 'A data structure that maps keys to values for near-instant lookup.' },
+  { q: 'Big O of binary search?', a: 'O(log n) — it halves the search space each step.' },
+  { q: 'What is a closure?', a: 'A function that remembers variables from the scope it was created in.' },
+  { q: 'What is REST?', a: 'An architectural style for APIs built on standard HTTP methods like GET and POST.' },
+  { q: 'What is a race condition?', a: 'When multiple processes access shared data at once, causing unpredictable results.' },
+  { q: 'What is Git?', a: 'A version control system for tracking changes to code over time.' },
+  { q: 'What is a linked list?', a: 'A sequence of nodes where each one points to the next.' },
+  { q: 'HTTP vs. HTTPS?', a: 'HTTPS is HTTP with encryption (TLS) added on top.' },
+  { q: 'Big O of a hash table lookup?', a: 'O(1) on average — constant time.' },
+  { q: 'What is a compiler?', a: 'A program that translates source code into machine code before it runs.' },
+  { q: 'What is an interpreter?', a: 'A program that executes code directly, line by line, with no separate compile step.' },
+  { q: 'What is a null reference error?', a: 'An error from trying to use a reference that points to nothing.' },
+  { q: 'What does CPU stand for?', a: 'Central Processing Unit — the chip that executes instructions.' },
+  { q: 'What is a boolean?', a: 'A data type with exactly two possible values: true or false.' },
+  { q: 'What is an array index?', a: "A number giving an element's position in an array, usually starting at 0." },
+];
