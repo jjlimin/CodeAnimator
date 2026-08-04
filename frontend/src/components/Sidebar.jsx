@@ -11,7 +11,7 @@ import {
   X,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { MASCOT_COLORS } from '../mascotColors';
+import { MASCOT_COLORS, swatchForMascot } from '../mascotColors';
 
 const StatusDot = ({ status }) => {
   const color =
@@ -48,7 +48,7 @@ const Sidebar = () => {
       <div className={`p-4 flex items-center ${isOpen ? 'justify-between' : 'justify-center'} mb-6`}>
         {isOpen && (
           <div className="flex items-center gap-3 animate-in fade-in duration-300 min-w-0">
-            <div className="text-violet-400 shrink-0">
+            <div className="shrink-0 transition-colors duration-300" style={{ color: swatchForMascot(mascotColor) }}>
               <UserCircle size={32} />
             </div>
             <span className="font-semibold text-white truncate" title={profile.email}>

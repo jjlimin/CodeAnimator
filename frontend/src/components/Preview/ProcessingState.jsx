@@ -25,20 +25,29 @@ const ProcessingState = ({ onCancel }) => {
   // Rotate the fun messages only while actually generating.
   useEffect(() => {
     if (checking) return;
-    const t = setInterval(() => setIdx((i) => (i + 1) % MESSAGES.length), 10000);
+    const t = setInterval(() => setIdx((i) => (i + 1) % MESSAGES.length), 8000);
     return () => clearInterval(t);
   }, [checking]);
 
-  const heading = checking ? 'Checking your code...' : 'Generating your video...';
   const message = checking ? 'Making sure it compiles ✅' : MESSAGES[idx];
 
   return (
-    <div className="flex flex-col items-center space-y-8 animate-in fade-in zoom-in duration-500 w-full">
-      <div className="text-left w-full mb-4">
-        <h2 className="text-5xl font-bold text-white mb-2">{heading}</h2>
+    <div className="flex flex-col items-center space-y-8 w-full">
+      <div className="text-left w-full mb-4 animate-fade-slide-up">
+        {checking ? (
+          <h2 className="text-5xl font-bold text-white mb-2">Checking your code...</h2>
+        ) : (
+          <p className="text-lg sm:text-xl font-medium text-white/80 tracking-wide">
+            <span key={message} className="inline-block animate-fade-slide-up">
+              {message}
+            </span>
+          </p>
+        )}
       </div>
 
-      <div className="relative w-full aspect-video bg-gradient-to-br from-[#2d1b4e] to-[#121212] rounded-[2.5rem] flex flex-col items-center justify-center border border-white/10 shadow-[0_0_80px_-20px_rgba(139,92,246,0.5)]">
+      <div
+        className="relative w-full aspect-video bg-gradient-to-br from-[#2d1b4e] to-[#121212] rounded-[2.5rem] flex flex-col items-center justify-center border border-white/10 shadow-[0_0_80px_-20px_rgba(139,92,246,0.5)] animate-fade-slide-up [animation-delay:120ms]"
+      >
         {checking ? (
           <>
             <img
@@ -48,7 +57,7 @@ const ProcessingState = ({ onCancel }) => {
               style={{ filter: filterForMascot(mascotColor) }}
             />
             <p className="text-2xl font-medium text-white tracking-wide">
-              <span key={message} className="inline-block animate-in fade-in slide-in-from-bottom-2 duration-500">
+              <span key={message} className="inline-block animate-fade-slide-up">
                 {message}
               </span>
             </p>
@@ -60,7 +69,7 @@ const ProcessingState = ({ onCancel }) => {
 
       <button
         onClick={onCancel}
-        className="bg-[#ef4444] hover:bg-red-600 text-white px-6 py-2 rounded-xl font-bold flex items-center gap-2 transition self-end"
+        className="bg-[#ef4444] hover:bg-red-600 text-white px-6 py-2 rounded-xl font-bold flex items-center gap-2 transition self-end animate-fade-slide-up [animation-delay:240ms]"
       >
         <XCircle size={20} /> Cancel
       </button>
