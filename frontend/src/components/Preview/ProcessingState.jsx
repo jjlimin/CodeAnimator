@@ -33,7 +33,7 @@ const ProcessingState = ({ onCancel }) => {
 
   return (
     <div className="flex flex-col items-center space-y-8 w-full">
-      <div className="text-left w-full mb-4 animate-fade-slide-up">
+      <div className="flex justify-between items-center w-full mb-4 animate-fade-slide-up">
         {checking ? (
           <h2 className="text-5xl font-bold text-white mb-2">Checking your code...</h2>
         ) : (
@@ -43,6 +43,13 @@ const ProcessingState = ({ onCancel }) => {
             </span>
           </p>
         )}
+
+        <button
+          onClick={onCancel}
+          className="bg-[#ef4444] hover:bg-red-600 text-white px-6 py-2 rounded-xl font-bold flex items-center gap-2 transition shrink-0"
+        >
+          <XCircle size={20} /> Cancel
+        </button>
       </div>
 
       <div
@@ -67,12 +74,10 @@ const ProcessingState = ({ onCancel }) => {
         )}
       </div>
 
-      <button
-        onClick={onCancel}
-        className="bg-[#ef4444] hover:bg-red-600 text-white px-6 py-2 rounded-xl font-bold flex items-center gap-2 transition self-end animate-fade-slide-up [animation-delay:240ms]"
-      >
-        <XCircle size={20} /> Cancel
-      </button>
+      <div className="w-full bg-[#1e1e1e]/50 p-6 rounded-2xl border border-white/5 opacity-60 space-y-2 animate-fade-slide-up [animation-delay:240ms]">
+        <div className="h-2 w-48 bg-gray-700 rounded"></div>
+        <div className="h-2 w-64 bg-gray-800 rounded"></div>
+      </div>
     </div>
   );
 };
