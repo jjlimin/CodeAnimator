@@ -39,24 +39,24 @@ const ProcessingState = ({ onCancel }) => {
       </div>
 
       <div className="relative w-full aspect-video bg-gradient-to-br from-[#2d1b4e] to-[#121212] rounded-[2.5rem] flex flex-col items-center justify-center border border-white/10 shadow-[0_0_80px_-20px_rgba(139,92,246,0.5)]">
-        <img
-          src="/loading.svg"
-          alt="loading"
-          className="w-32 h-32 mb-4 animate-pulse transition-[filter] duration-300"
-          style={{ filter: filterForMascot(mascotColor) }}
-        />
-        <p className="text-2xl font-medium text-white tracking-wide">
-          <span key={message} className="inline-block animate-in fade-in slide-in-from-bottom-2 duration-500">
-            {message}
-          </span>
-        </p>
-      </div>
-
-      {!checking && (
-        <div className="w-full bg-[#1e1e1e]/50 p-6 rounded-2xl border border-white/5">
+        {checking ? (
+          <>
+            <img
+              src="/loading.svg"
+              alt="loading"
+              className="w-32 h-32 mb-4 animate-pulse transition-[filter] duration-300"
+              style={{ filter: filterForMascot(mascotColor) }}
+            />
+            <p className="text-2xl font-medium text-white tracking-wide">
+              <span key={message} className="inline-block animate-in fade-in slide-in-from-bottom-2 duration-500">
+                {message}
+              </span>
+            </p>
+          </>
+        ) : (
           <Flashcard />
-        </div>
-      )}
+        )}
+      </div>
 
       <button
         onClick={onCancel}

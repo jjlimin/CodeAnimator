@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Editor from '@monaco-editor/react';
 import { Copy, Check } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { gradientForMascot } from '../../mascotColors';
 
 // Requested explanation depth options, shown as a segmented control.
 const COMPLEXITY_OPTIONS = [
@@ -11,9 +12,10 @@ const COMPLEXITY_OPTIONS = [
 ];
 
 const CodeInputState = ({ code, setCode, error, onGenerate }) => {
-  const { profile, complexity, setComplexity } = useApp();
+  const { profile, complexity, setComplexity, mascotColor } = useApp();
   const firstName = (profile.name || '').trim().split(' ')[0] || 'there';
   const [copied, setCopied] = useState(false);
+  const { from, to, shadowRgb } = gradientForMascot(mascotColor);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(code);
@@ -97,9 +99,13 @@ const CodeInputState = ({ code, setCode, error, onGenerate }) => {
         />
 
         <div className="absolute bottom-6 right-6 sm:bottom-8 sm:right-8 z-20">
-          <button 
+          <button
             onClick={onGenerate}
-            className="bg-gradient-to-r from-[#EA6F22] to-[#d35f1c] hover:brightness-125 text-white px-8 py-3 sm:px-12 sm:py-4 rounded-xl sm:rounded-2xl font-bold text-base sm:text-xl transition-all shadow-[0_10px_50px_-10px_rgba(234,111,34,0.7)] active:scale-95"
+            style={{
+              backgroundImage: `linear-gradient(to right, ${from}, ${to})`,
+              boxShadow: `0 10px 50px -10px rgba(${shadowRgb},0.7)`,
+            }}
+            className="hover:brightness-125 text-white px-8 py-3 sm:px-12 sm:py-4 rounded-xl sm:rounded-2xl font-bold text-base sm:text-xl transition-all active:scale-95"
           >
             Generate Video
           </button>
