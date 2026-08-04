@@ -55,9 +55,14 @@ const CodeInputState = ({ code, setCode, error, onGenerate }) => {
                   key={opt.id}
                   onClick={() => setComplexity(opt.id)}
                   title={opt.hint}
+                  style={
+                    complexity === opt.id
+                      ? { backgroundImage: `linear-gradient(to right, ${from}, ${to})` }
+                      : undefined
+                  }
                   className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all ${
                     complexity === opt.id
-                      ? 'bg-gradient-to-r from-[#8b5cf6] to-[#7c3aed] text-white shadow'
+                      ? 'text-white shadow'
                       : 'text-gray-400 hover:text-white'
                   }`}
                 >
