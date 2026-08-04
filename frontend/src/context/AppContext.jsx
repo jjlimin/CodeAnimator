@@ -37,6 +37,9 @@ export function AppProvider({ children }) {
   const [currentTitle, setCurrentTitle] = useState('');
   const [code, setCode] = useState('# Paste your code here\nprint("Hello World!")');
   const [complexity, setComplexity] = useState('balanced'); // high_level | balanced | detailed
+  // Set by editVideo() to the job being replaced; the poll loop deletes it once
+  // the new one completes, so an edit never leaves a duplicate in the history.
+  const pendingDeleteJobIdRef = useRef(null);
 
   // Load the signed-in user's name/email for the greeting + sidebar.
   // Read from the ID token first — it carries `name`/`email` for BOTH email
@@ -153,6 +156,13 @@ export function AppProvider({ children }) {
         if (data.status === 'COMPLETED' && data.video_url) {
           setVideoUrl(data.video_url);
           setView('done');
+          // This completion replaces an edited video -> remove the old row
+          // now that the new one has taken its place (never both at once).
+          const oldId = pendingDeleteJobIdRef.current;
+          if (oldId) {
+            pendingDeleteJobIdRef.current = null;
+            apiCancelJob(oldId).catch((e) => console.error('cleanup of edited job failed', e)).finally(refreshJobs);
+          }
         } else if (data.status === 'FAILED') {
           // The render failed (state machine Catch marked it FAILED).
           setView('gen_failed');
@@ -196,6 +206,7 @@ export function AppProvider({ children }) {
       refreshJobs();
     } catch (e) {
       console.error('generate failed', e);
+      pendingDeleteJobIdRef.current = null; // the edit attempt failed -> keep the original job
       setView('idle');
     }
   }, [code, complexity, refreshJobs]);
@@ -249,14 +260,26 @@ export function AppProvider({ children }) {
   );
 
   const newVideo = useCallback(() => {
+    pendingDeleteJobIdRef.current = null;
     setView('idle');
     setActiveJobId(null);
     setVideoUrl(null);
   }, []);
 
+  // Re-render the finished video from a DoneState edit: back to the code
+  // screen with the same code, but remembers the finished job so the poll
+  // loop can delete it once the new one completes -> no duplicate history row.
+  const editVideo = useCallback(() => {
+    pendingDeleteJobIdRef.current = activeJobId;
+    setView('idle');
+    setActiveJobId(null);
+    setVideoUrl(null);
+  }, [activeJobId]);
+
   // Cancel actually stops the running job (Step Function + render), then resets.
   const cancelJob = useCallback(async (jobId) => {
     const id = jobId || activeJobId;
+    pendingDeleteJobIdRef.current = null; // aborting -> keep whatever job was being replaced, if any
     setView('idle');
     setActiveJobId(null);
     setVideoUrl(null);
@@ -319,6 +342,7 @@ export function AppProvider({ children }) {
     cancelJob,
     deleteJob,
     newVideo,
+    editVideo,
     signOut,
     activeJobId,
   };

@@ -41,10 +41,10 @@ const DoneState = ({ videoUrl, title, code, onRename, onEdit }) => {
 
   return (
     <div className="flex flex-col space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700 w-full">
-      <div className="flex justify-between items-start">
-        <div className="min-w-0">
-          <h2 className="text-5xl font-bold text-white mb-2">Video generated successfully!</h2>
-          <div className="flex items-center gap-2 text-gray-400 text-xl">
+      <div className="min-w-0">
+        <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">Video generated successfully!</h2>
+        <div className="flex justify-between items-center gap-2">
+          <div className="flex items-center gap-2 text-gray-400 text-xl min-w-0">
             {editing ? (
               <>
                 <input
@@ -71,15 +71,15 @@ const DoneState = ({ videoUrl, title, code, onRename, onEdit }) => {
               </>
             )}
           </div>
-        </div>
 
-        <div className="flex gap-6 shrink-0">
-          <button onClick={onEdit} className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors text-lg">
-            <Pencil size={20} /> New video
-          </button>
-          <button onClick={handleDownload} disabled={downloading} className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors text-lg disabled:opacity-50">
-            <Download size={20} /> {downloading ? 'Downloading...' : 'Download'}
-          </button>
+          <div className="flex gap-6 shrink-0">
+            <button onClick={onEdit} className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors text-lg">
+              <Pencil size={20} /> Edit
+            </button>
+            <button onClick={handleDownload} disabled={downloading} className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors text-lg disabled:opacity-50">
+              <Download size={20} /> {downloading ? 'Downloading...' : 'Download'}
+            </button>
+          </div>
         </div>
       </div>
 
