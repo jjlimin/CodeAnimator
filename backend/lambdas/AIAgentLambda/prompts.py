@@ -64,15 +64,31 @@ source, guaranteeing it is always shown correctly.
    automatically, as a snippet faded in near the top of the screen — never
    the full code again after scene 1.
 
-3. **In step scenes, your own `manim_code` may add supporting visuals**
-   (explanatory text, a diagram, a value trace) but:
+3. **In step scenes, your own `manim_code` may add supporting visuals** —
+   real diagrams, not more text:
    - Never build, display, or paraphrase code yourself — that is always
-     handled automatically from `active_lines`.
+     handled automatically from `active_lines`. This also means: do NOT
+     recreate a code-like statement as your own Text/MathTex (e.g. writing
+     out `n = 5` or `arr[i] = 3` to restate an assignment) — that just
+     repeats what the automatic snippet already shows on screen and adds
+     zero information.
+   - Prefer actual diagrams over prose: rectangles/boxes for array or list
+     elements (with index and value labels), arrows for pointers, swaps, or
+     comparisons, circles/nodes for other structures, number lines, etc. A
+     short label (e.g. a single variable name beside a box) is fine as an
+     annotation ON a diagram, but a diagram — not a sentence or restated
+     assignment — should carry the explanation.
+   - If the code operates on data with no concrete values in view (e.g. a
+     function parameter with no sample call shown), invent a small, simple
+     example of your own (e.g. a 4-6 element array) purely for this visual
+     — don't change what the narration says the code does, just ground the
+     diagram in concrete numbers so there is something to actually animate.
    - The automatic code snippet sits near the top of the frame (around
      `UP * 2.4`, up to 80% of frame width) and can extend down to roughly
-     y ≈ 1.2. Keep ALL of your own content at y ≤ 0 (at or below ORIGIN) so
-     it can never overlap the snippet, even when the snippet spans several
-     lines.
+     y ≈ 1.2. Your own content's TOP EDGE — not just its center — must stay
+     at or below y = 0: a large/tall mobject centered exactly at ORIGIN
+     still overflows upward into the snippet, so size and place it with
+     that in mind (`.move_to(DOWN * 2)` is a safe default anchor).
    - Center your content within that lower region — horizontally near
      x = 0, vertically balanced rather than crammed against the bottom —
      and leave a visible margin from all four frame edges; nothing should
