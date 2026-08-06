@@ -71,3 +71,36 @@ export const cancelJob = async (jobId) => {
   if (!response.ok) throw new Error(`cancel failed: ${response.status}`);
   return response.json();
 };
+
+// PATCH /job — share (or unshare) a completed job to Explore.
+// Returns { job_id, title, is_shared }.
+export const shareJob = async (jobId, isShared, ownerName) => {
+  const payload = { job_id: jobId, is_shared: isShared };
+  if (ownerName) payload.owner_name = ownerName;
+  const response = await fetch(`${BASE_URL}/job`, {
+    method: 'PATCH',
+    headers: await authHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error(`share failed: ${response.status}`);
+  return response.json();
+};
+
+// GET /explore — every shared video, newest first. Returns { videos: [...] }.
+export const listExplore = async () => {
+  const response = await fetch(`${BASE_URL}/explore`);
+  if (!response.ok) throw new Error(`listExplore failed: ${response.status}`);
+  return response.json();
+};
+
+// POST /explore/save — copy a shared video + its code into the caller's own
+// history. Returns { job_id } (the new copy's id).
+export const saveExploreVideo = async (jobId) => {
+  const response = await fetch(`${BASE_URL}/explore/save`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ job_id: jobId }),
+  });
+  if (!response.ok) throw new Error(`saveExploreVideo failed: ${response.status}`);
+  return response.json();
+};

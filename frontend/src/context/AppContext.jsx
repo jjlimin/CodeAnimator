@@ -7,6 +7,7 @@ import {
   getJobs,
   renameJob as apiRenameJob,
   cancelJob as apiCancelJob,
+  shareJob as apiShareJob,
 } from '../api/videoApi';
 import { DEFAULT_MASCOT_COLOR, isMascotColor } from '../mascotColors';
 
@@ -29,7 +30,9 @@ export function AppProvider({ children }) {
   const [mascotColorChosen, setMascotColorChosen] = useState(false);
   const [jobs, setJobs] = useState([]);
   const [jobsLoaded, setJobsLoaded] = useState(false);
+  const [page, setPage] = useState('generate'); // generate | explore
   const [view, setView] = useState('idle'); // idle | processing | done | code_error
+  const [showSharePrompt, setShowSharePrompt] = useState(false);
   const [codeError, setCodeError] = useState(''); // compile error when code is broken
   const [genPhase, setGenPhase] = useState('generating'); // checking | generating
   const [activeJobId, setActiveJobId] = useState(null);
@@ -156,6 +159,7 @@ export function AppProvider({ children }) {
         if (data.status === 'COMPLETED' && data.video_url) {
           setVideoUrl(data.video_url);
           setView('done');
+          setShowSharePrompt(true); // ask once per fresh completion, not on history revisits
           // This completion replaces an edited video -> remove the old row
           // now that the new one has taken its place (never both at once).
           const oldId = pendingDeleteJobIdRef.current;
@@ -220,6 +224,7 @@ export function AppProvider({ children }) {
 
   // Open a job from the history sidebar.
   const openJob = useCallback(async (job) => {
+    setPage('generate'); // history lives in the generator flow, not Explore
     if (job.status === 'COMPLETED') {
       try {
         const data = await checkStatus(job.job_id); // fresh presigned URL
@@ -259,8 +264,23 @@ export function AppProvider({ children }) {
     [],
   );
 
+  // Answers the "share this to Explore?" popup for the job that just finished.
+  const shareVideo = useCallback(
+    async (share) => {
+      setShowSharePrompt(false);
+      if (!share || !activeJobId) return;
+      try {
+        await apiShareJob(activeJobId, true, profile.name);
+      } catch (e) {
+        console.error('share failed', e);
+      }
+    },
+    [activeJobId, profile.name],
+  );
+
   const newVideo = useCallback(() => {
     pendingDeleteJobIdRef.current = null;
+    setPage('generate');
     setView('idle');
     setActiveJobId(null);
     setVideoUrl(null);
@@ -325,8 +345,13 @@ export function AppProvider({ children }) {
     mascotColorChosen,
     saveMascotColor,
     jobs,
+    refreshJobs,
+    page,
+    setPage,
     view,
     genPhase,
+    showSharePrompt,
+    shareVideo,
     videoUrl,
     currentTitle,
     code,

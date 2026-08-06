@@ -2,11 +2,13 @@ import React from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import MainLayout from './layouts/MainLayout';
 import GeneratorPage from './pages/GeneratorPage';
+import ExplorePage from './pages/ExplorePage';
 import Onboarding from './components/Onboarding';
+import SharePromptModal from './components/SharePromptModal';
 import './index.css';
 
 function Shell() {
-  const { profileLoaded, jobsLoaded, needsOnboarding } = useApp();
+  const { profileLoaded, jobsLoaded, needsOnboarding, page } = useApp();
 
   // Avoid a flash of the wrong screen before the profile has loaded.
   if (!profileLoaded) return <div className="h-screen w-full bg-[#121212]" />;
@@ -17,7 +19,8 @@ function Shell() {
 
   return (
     <MainLayout>
-      <GeneratorPage />
+      {page === 'explore' ? <ExplorePage /> : <GeneratorPage />}
+      <SharePromptModal />
     </MainLayout>
   );
 }

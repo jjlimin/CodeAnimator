@@ -9,6 +9,7 @@ import {
   Check,
   Trash2,
   X,
+  Compass,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { MASCOT_COLORS, swatchForMascot } from '../mascotColors';
@@ -22,7 +23,7 @@ const StatusDot = ({ status }) => {
 };
 
 const Sidebar = () => {
-  const { profile, jobs, openJob, renameJob, deleteJob, newVideo, signOut, mascotColor, saveMascotColor } = useApp();
+  const { profile, jobs, openJob, renameJob, deleteJob, newVideo, signOut, mascotColor, saveMascotColor, page, setPage } = useApp();
   const [isOpen, setIsOpen] = useState(true);
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState('');
@@ -74,6 +75,23 @@ const Sidebar = () => {
             <PlusCircle size={20} />
           </span>
           {isOpen && <span className="text-sm font-medium">New Video</span>}
+        </button>
+
+        <button
+          onClick={() => setPage('explore')}
+          className={`w-full flex items-center ${isOpen ? 'justify-start px-4' : 'justify-center'} py-3 hover:bg-white/5 rounded-xl transition-all group ${
+            page === 'explore' ? 'text-violet-400' : ''
+          }`}
+          title={!isOpen ? 'Explore' : ''}
+        >
+          <span
+            className={`${isOpen ? 'mr-3' : ''} transition-colors ${
+              page === 'explore' ? 'text-violet-400' : 'text-gray-400 group-hover:text-violet-400'
+            }`}
+          >
+            <Compass size={20} />
+          </span>
+          {isOpen && <span className="text-sm font-medium">Explore</span>}
         </button>
       </nav>
 
