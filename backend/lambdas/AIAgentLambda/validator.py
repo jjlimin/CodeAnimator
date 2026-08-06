@@ -5,10 +5,18 @@ Tiers (each runs only if the previous one passed):
   2. Static Manim lint — AST checks for required structure and known
                          removed/renamed ManimCE APIs, works everywhere.
   3. Dry-run execution — subprocess that executes the scene with
-                         `config.dry_run = True` (no video output). Runs only
-                         where the `manim` package is importable (local dev,
-                         ECS, container-image Lambda). Skipped automatically
-                         in a zip-package Lambda.
+                         `config.dry_run = True` (no video output), then
+                         checks every top-level mobject still on screen at
+                         the end of the scene for pairwise bounding-box
+                         overlap (this is what catches the model's own
+                         visuals colliding with the automatic code snippet).
+                         Runs only where the `manim` package is importable
+                         (local dev, ECS, container-image Lambda). Skipped
+                         automatically in a zip-package Lambda — AIAgentLambda
+                         is deployed as one today (see ARCHITECTURE.md), so
+                         this tier — overlap check included — is currently
+                         dormant in production and only exercises via
+                         local_test.py / a future manim-capable deployment.
 """
 
 import ast
@@ -59,10 +67,26 @@ RENAMED_KWARGS = {
     ("Code", "background_stroke_color"): "removed in ManimCE 0.19 — pass background_config={'stroke_color': ...} or omit",
 }
 
+# Marker the parent process greps for in stderr to tell an overlap failure
+# apart from an ordinary crash (both exit non-zero from the subprocess).
+OVERLAP_MARKER = "VALIDATION: overlapping mobjects detected"
+
+# Minimum bounding-box intersection (in Manim scene units — the default
+# frame is ~14.2 wide x 8 tall) before two elements count as "overlapping."
+# Small enough to catch real collisions (the reported bug was ~1+ unit of
+# overlap) while tolerating elements placed edge-to-edge by design.
+_OVERLAP_TOLERANCE = 0.15
+
 # Appended to the scene file for the dry-run subprocess. Finds the Scene
-# subclass defined in the file itself and renders it with output disabled.
+# subclass defined in the file itself, renders it with output disabled, then
+# checks every top-level mobject still on screen at the end of the scene for
+# pairwise bounding-box overlap. This is a real geometric check against the
+# actual positions/sizes Manim computed — not a guess from the source code —
+# but it only sees the scene's FINAL state (whatever wasn't faded out before
+# the scene ends), so a collision that only exists mid-animation could slip
+# through; that tradeoff keeps this simple and fast.
 _DRY_RUN_DRIVER = textwrap.dedent(
-    """
+    f"""
 
     if __name__ == "__main__":
         import sys as _sys
@@ -82,8 +106,28 @@ _DRY_RUN_DRIVER = textwrap.dedent(
         if not _scene_classes:
             print("VALIDATION: no Scene subclass defined in the file", file=_sys.stderr)
             _sys.exit(1)
+
+        _overlaps = []
         for _cls in _scene_classes:
-            _cls().render()
+            _scene = _cls()
+            _scene.render()
+            _mobs = [m for m in _scene.mobjects if m.width > 0 and m.height > 0]
+            for _i in range(len(_mobs)):
+                for _j in range(_i + 1, len(_mobs)):
+                    _a, _b = _mobs[_i], _mobs[_j]
+                    _x_overlap = min(_a.get_right()[0], _b.get_right()[0]) - max(_a.get_left()[0], _b.get_left()[0])
+                    _y_overlap = min(_a.get_top()[1], _b.get_top()[1]) - max(_a.get_bottom()[1], _b.get_bottom()[1])
+                    if _x_overlap > {_OVERLAP_TOLERANCE} and _y_overlap > {_OVERLAP_TOLERANCE}:
+                        _overlaps.append(
+                            f"{{type(_a).__name__}} and {{type(_b).__name__}} overlap by "
+                            f"~{{min(_x_overlap, _y_overlap):.2f}} units"
+                        )
+
+        if _overlaps:
+            print("{OVERLAP_MARKER}:", file=_sys.stderr)
+            for _o in _overlaps:
+                print(" - " + _o, file=_sys.stderr)
+            _sys.exit(2)
     """
 )
 
@@ -238,6 +282,13 @@ def _check_dry_run(code: str, timeout: int) -> Optional[str]:
     if proc.returncode != 0:
         # The traceback is the last, most relevant part of stderr.
         stderr_tail = (proc.stderr or proc.stdout or "no error output").strip()[-3000:]
+        if OVERLAP_MARKER in stderr_tail:
+            return (
+                "Overlap check failed — two or more on-screen elements' bounding "
+                "boxes intersect at the end of the scene (this includes the "
+                "automatic code snippet, which the model's own content must "
+                "never overlap):\n" + stderr_tail
+            )
         return f"Dry-run execution failed (exit code {proc.returncode}):\n{stderr_tail}"
     return None
 

@@ -25,15 +25,13 @@ logical sequence of short animated scenes with voice narration.
 If the code has a loop (or nested loops) that would repeat many times over
 the same data (a sort, a search, a simulation, ...), never create a scene
 per pass — that is slow and repetitive to watch. Instead:
-- Animate the first iteration (or first couple, per the requested depth
-  below) concretely, with real values, so the viewer sees exactly how one
-  pass works.
+- Animate the first THREE iterations concretely, with real values, so the
+  viewer actually sees the pattern — one iteration alone is not enough to
+  establish it.
 - Then narrate, in a single scene, that the same pattern continues for the
   rest of the data — don't animate every remaining pass.
 - Finish with the final result/state the loop produces (e.g. the fully
   sorted array), so the viewer sees where it ends up.
-- Exactly how many concrete iterations to animate is set by the requested
-  depth directive below.
 
 ## Manim code requirements (each scene's `manim_code` value)
 - Self-contained: starts with `from manim import *` and defines exactly ONE
@@ -228,9 +226,7 @@ COMPLEXITY_DIRECTIVES = {
         "variable, array/list, or other standard data structure changing, "
         "add a simple visual for it (e.g. labeled boxes) synced to that "
         "moment in the narration — only where it genuinely aids "
-        "understanding, not for every line. For a loop that repeats many "
-        "times, animate just the first iteration concretely, then narrate "
-        "that it repeats and cut to the final result."
+        "understanding, not for every line."
     ),
     "detailed": (
         "Requested depth: DETAILED WALKTHROUGH. Go step by step through the logic, "
@@ -242,10 +238,7 @@ COMPLEXITY_DIRECTIVES = {
         "narration as the code manipulates it — this is expected at this "
         "depth. Keep each diagram clean and minimal and stay faithful to "
         "what the code actually does; don't let it crowd the frame or "
-        "drift from the code's real behavior. For a loop that repeats many "
-        "times, animate the first two or three iterations concretely to "
-        "firmly establish the pattern, then narrate that it continues and "
-        "cut to the final result — still not every single pass."
+        "drift from the code's real behavior."
     ),
 }
 DEFAULT_COMPLEXITY = "balanced"
