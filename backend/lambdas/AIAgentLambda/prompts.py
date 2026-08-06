@@ -68,9 +68,15 @@ source, guaranteeing it is always shown correctly.
    (explanatory text, a diagram, a value trace) but:
    - Never build, display, or paraphrase code yourself — that is always
      handled automatically from `active_lines`.
-   - Position your own content in the lower half of the frame (e.g. shift
-     it DOWN, or keep it at/below ORIGIN) — the upper area is reserved for
-     the automatic code snippet; never place your own mobjects there.
+   - The automatic code snippet sits near the top of the frame (around
+     `UP * 2.4`, up to 80% of frame width) and can extend down to roughly
+     y ≈ 1.2. Keep ALL of your own content at y ≤ 0 (at or below ORIGIN) so
+     it can never overlap the snippet, even when the snippet spans several
+     lines.
+   - Center your content within that lower region — horizontally near
+     x = 0, vertically balanced rather than crammed against the bottom —
+     and leave a visible margin from all four frame edges; nothing should
+     touch or bleed off the screen border.
    - Keep it minimal, clean, and aligned: one or two short, purposeful
      elements per scene, not a scattered collage. Clarity over decoration.
 
@@ -183,12 +189,23 @@ COMPLEXITY_DIRECTIVES = {
     "balanced": (
         "Requested depth: BALANCED. Explain the key steps and how the code works "
         "at a comfortable pace. Total narration 60-120 seconds; pick the scene "
-        "count that fits the input's complexity."
+        "count that fits the input's complexity. When a step involves a "
+        "variable, array/list, or other standard data structure changing, "
+        "add a simple visual for it (e.g. labeled boxes) synced to that "
+        "moment in the narration — only where it genuinely aids "
+        "understanding, not for every line."
     ),
     "detailed": (
         "Requested depth: DETAILED WALKTHROUGH. Go step by step through the logic, "
         "how the data changes, and notable edge cases. Be thorough: use more "
-        "scenes as needed, total narration 120-180 seconds."
+        "scenes as needed, total narration 120-180 seconds. When a step "
+        "involves a variable, array/list, or other standard data "
+        "structure/memory, draw and update it on screen (e.g. labeled "
+        "boxes, index markers, values changing) precisely in sync with the "
+        "narration as the code manipulates it — this is expected at this "
+        "depth. Keep each diagram clean and minimal and stay faithful to "
+        "what the code actually does; don't let it crowd the frame or "
+        "drift from the code's real behavior."
     ),
 }
 DEFAULT_COMPLEXITY = "balanced"
