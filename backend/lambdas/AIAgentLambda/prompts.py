@@ -21,6 +21,20 @@ logical sequence of short animated scenes with voice narration.
   the input: a simple high-level pass might need only 2 scenes; a detailed
   walkthrough of a complex algorithm might need 6+.
 
+## Loops that repeat many times — dry-run a few passes, then skip ahead
+If the code has a loop (or nested loops) that would repeat many times over
+the same data (a sort, a search, a simulation, ...), never create a scene
+per pass — that is slow and repetitive to watch. Instead:
+- Animate the first iteration (or first couple, per the requested depth
+  below) concretely, with real values, so the viewer sees exactly how one
+  pass works.
+- Then narrate, in a single scene, that the same pattern continues for the
+  rest of the data — don't animate every remaining pass.
+- Finish with the final result/state the loop produces (e.g. the fully
+  sorted array), so the viewer sees where it ends up.
+- Exactly how many concrete iterations to animate is set by the requested
+  depth directive below.
+
 ## Manim code requirements (each scene's `manim_code` value)
 - Self-contained: starts with `from manim import *` and defines exactly ONE
   Scene subclass (e.g. `class Scene1(Scene):`) with a `construct` method.
@@ -83,11 +97,16 @@ source, guaranteeing it is always shown correctly.
      example of your own (e.g. a 4-6 element array) purely for this visual
      — don't change what the narration says the code does, just ground the
      diagram in concrete numbers so there is something to actually animate.
-   - The automatic code snippet sits near the top of the frame (around
-     `UP * 2.4`, up to 80% of frame width) and can extend down to roughly
-     y ≈ 1.2. Your own content's TOP EDGE — not just its center — must stay
-     at or below y = 0: a large/tall mobject centered exactly at ORIGIN
-     still overflows upward into the snippet, so size and place it with
+   - The top ~third of the frame (roughly y > 0, up to the very top) is
+     reserved for the automatic code snippet and is completely off-limits —
+     this applies to EVERY mobject you create, with no exception for
+     titles, captions, or headings. Do not add a title/heading text at the
+     top of a step scene at all; if a diagram needs a label, place it
+     directly beside or above the diagram itself, still within the
+     allowed lower region below. Never use `.to_edge(UP)` or similar.
+   - Your own content's TOP EDGE — not just its center — must stay at or
+     below y = 0: a large/tall mobject centered exactly at ORIGIN still
+     overflows upward into the reserved zone, so size and place it with
      that in mind (`.move_to(DOWN * 2)` is a safe default anchor).
    - Center your content within that lower region — horizontally near
      x = 0, vertically balanced rather than crammed against the bottom —
@@ -209,7 +228,9 @@ COMPLEXITY_DIRECTIVES = {
         "variable, array/list, or other standard data structure changing, "
         "add a simple visual for it (e.g. labeled boxes) synced to that "
         "moment in the narration — only where it genuinely aids "
-        "understanding, not for every line."
+        "understanding, not for every line. For a loop that repeats many "
+        "times, animate just the first iteration concretely, then narrate "
+        "that it repeats and cut to the final result."
     ),
     "detailed": (
         "Requested depth: DETAILED WALKTHROUGH. Go step by step through the logic, "
@@ -221,7 +242,10 @@ COMPLEXITY_DIRECTIVES = {
         "narration as the code manipulates it — this is expected at this "
         "depth. Keep each diagram clean and minimal and stay faithful to "
         "what the code actually does; don't let it crowd the frame or "
-        "drift from the code's real behavior."
+        "drift from the code's real behavior. For a loop that repeats many "
+        "times, animate the first two or three iterations concretely to "
+        "firmly establish the pattern, then narrate that it continues and "
+        "cut to the final result — still not every single pass."
     ),
 }
 DEFAULT_COMPLEXITY = "balanced"
