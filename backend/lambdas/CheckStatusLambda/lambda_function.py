@@ -44,7 +44,8 @@ def lambda_handler(event, context):
                 "status": item.get('status', {}).get('S', 'UNKNOWN'),
                 "title": item.get('title', {}).get('S', ''),
                 "user_code": item.get('user_code', {}).get('S', ''),
-                "video_url": video_url
+                "video_url": video_url,
+                "is_shared": item.get('is_shared', {}).get('S') == 'true'
             })
         }
     except Exception as e:

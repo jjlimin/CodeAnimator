@@ -32,7 +32,7 @@ export function AppProvider({ children }) {
   const [jobsLoaded, setJobsLoaded] = useState(false);
   const [page, setPage] = useState('generate'); // generate | explore
   const [view, setView] = useState('idle'); // idle | processing | done | code_error
-  const [showSharePrompt, setShowSharePrompt] = useState(false);
+  const [isShared, setIsShared] = useState(false); // is the open (done) job on Explore
   const [codeError, setCodeError] = useState(''); // compile error when code is broken
   const [genPhase, setGenPhase] = useState('generating'); // checking | generating
   const [activeJobId, setActiveJobId] = useState(null);
@@ -158,8 +158,8 @@ export function AppProvider({ children }) {
         if (data.user_code) setCode(data.user_code);
         if (data.status === 'COMPLETED' && data.video_url) {
           setVideoUrl(data.video_url);
+          setIsShared(!!data.is_shared);
           setView('done');
-          setShowSharePrompt(true); // ask once per fresh completion, not on history revisits
           // This completion replaces an edited video -> remove the old row
           // now that the new one has taken its place (never both at once).
           const oldId = pendingDeleteJobIdRef.current;
@@ -230,6 +230,7 @@ export function AppProvider({ children }) {
         const data = await checkStatus(job.job_id); // fresh presigned URL
         setActiveJobId(job.job_id);
         setVideoUrl(data.video_url);
+        setIsShared(!!data.is_shared);
         setCurrentTitle(data.title || job.title);
         // Older jobs (created before this was stored) have no user_code —
         // leave the editor buffer alone rather than blanking it out.
@@ -264,19 +265,16 @@ export function AppProvider({ children }) {
     [],
   );
 
-  // Answers the "share this to Explore?" popup for the job that just finished.
-  const shareVideo = useCallback(
-    async (share) => {
-      setShowSharePrompt(false);
-      if (!share || !activeJobId) return;
-      try {
-        await apiShareJob(activeJobId, true, profile.name);
-      } catch (e) {
-        console.error('share failed', e);
-      }
-    },
-    [activeJobId, profile.name],
-  );
+  // Shares the currently open (done) job to Explore.
+  const shareVideo = useCallback(async () => {
+    if (!activeJobId || isShared) return;
+    try {
+      await apiShareJob(activeJobId, true, profile.name);
+      setIsShared(true);
+    } catch (e) {
+      console.error('share failed', e);
+    }
+  }, [activeJobId, isShared, profile.name]);
 
   const newVideo = useCallback(() => {
     pendingDeleteJobIdRef.current = null;
@@ -284,6 +282,7 @@ export function AppProvider({ children }) {
     setView('idle');
     setActiveJobId(null);
     setVideoUrl(null);
+    setIsShared(false);
   }, []);
 
   // Re-render the finished video from a DoneState edit: back to the code
@@ -294,6 +293,7 @@ export function AppProvider({ children }) {
     setView('idle');
     setActiveJobId(null);
     setVideoUrl(null);
+    setIsShared(false);
   }, [activeJobId]);
 
   // Cancel actually stops the running job (Step Function + render), then resets.
@@ -303,6 +303,7 @@ export function AppProvider({ children }) {
     setView('idle');
     setActiveJobId(null);
     setVideoUrl(null);
+    setIsShared(false);
     if (!id) return;
     try {
       await apiCancelJob(id);
@@ -350,7 +351,7 @@ export function AppProvider({ children }) {
     setPage,
     view,
     genPhase,
-    showSharePrompt,
+    isShared,
     shareVideo,
     videoUrl,
     currentTitle,

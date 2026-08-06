@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
-import { Pencil, Download, Check } from 'lucide-react';
+import { Pencil, Download, Check, Share2 } from 'lucide-react';
 
-const DoneState = ({ videoUrl, title, code, onRename, onEdit }) => {
+const DoneState = ({ videoUrl, title, code, onRename, onEdit, isShared, onShare }) => {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title || '');
   const [downloading, setDownloading] = useState(false);
@@ -73,6 +73,21 @@ const DoneState = ({ videoUrl, title, code, onRename, onEdit }) => {
           </div>
 
           <div className="flex gap-6 shrink-0">
+            <button
+              onClick={onShare}
+              disabled={isShared}
+              className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors text-lg disabled:opacity-50"
+            >
+              {isShared ? (
+                <>
+                  <Check size={20} className="text-green-400" /> Shared
+                </>
+              ) : (
+                <>
+                  <Share2 size={20} /> Share
+                </>
+              )}
+            </button>
             <button onClick={onEdit} className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors text-lg">
               <Pencil size={20} /> Edit
             </button>

@@ -4,7 +4,6 @@ import MainLayout from './layouts/MainLayout';
 import GeneratorPage from './pages/GeneratorPage';
 import ExplorePage from './pages/ExplorePage';
 import Onboarding from './components/Onboarding';
-import SharePromptModal from './components/SharePromptModal';
 import './index.css';
 
 function Shell() {
@@ -20,7 +19,6 @@ function Shell() {
   return (
     <MainLayout>
       {page === 'explore' ? <ExplorePage /> : <GeneratorPage />}
-      <SharePromptModal />
     </MainLayout>
   );
 }

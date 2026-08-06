@@ -8,7 +8,7 @@ import CodeErrorChoice from '../components/Preview/CodeErrorChoice';
 import GenFailed from '../components/Preview/GenFailed';
 
 const GeneratorPage = () => {
-  const { view, code, setCode, startGenerate, editVideo, cancelJob, videoUrl, currentTitle, renameJob, activeJobId, mascotColor } = useApp();
+  const { view, code, setCode, startGenerate, editVideo, cancelJob, videoUrl, currentTitle, renameJob, activeJobId, mascotColor, isShared, shareVideo } = useApp();
 
   return (
     <div className="flex flex-col h-full w-full">
@@ -43,6 +43,8 @@ const GeneratorPage = () => {
               code={code}
               onRename={(t) => renameJob(activeJobId, t)}
               onEdit={editVideo}
+              isShared={isShared}
+              onShare={shareVideo}
             />
           )}
         </div>
