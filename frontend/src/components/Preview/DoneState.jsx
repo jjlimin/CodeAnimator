@@ -74,19 +74,12 @@ const DoneState = ({ videoUrl, title, code, onRename, onEdit, isShared, onShare 
 
           <div className="flex gap-6 shrink-0">
             <button
-              onClick={onShare}
-              disabled={isShared}
-              className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors text-lg disabled:opacity-50"
+              onClick={() => onShare(!isShared)}
+              className={`flex items-center gap-2 transition-colors text-lg ${
+                isShared ? 'text-green-400 hover:text-red-400' : 'text-gray-300 hover:text-white'
+              }`}
             >
-              {isShared ? (
-                <>
-                  <Check size={20} className="text-green-400" /> Shared
-                </>
-              ) : (
-                <>
-                  <Share2 size={20} /> Share
-                </>
-              )}
+              <Share2 size={20} /> {isShared ? 'Remove from Explore' : 'Add to Explore'}
             </button>
             <button onClick={onEdit} className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors text-lg">
               <Pencil size={20} /> Edit

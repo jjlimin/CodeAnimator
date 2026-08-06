@@ -265,16 +265,16 @@ export function AppProvider({ children }) {
     [],
   );
 
-  // Shares the currently open (done) job to Explore.
-  const shareVideo = useCallback(async () => {
-    if (!activeJobId || isShared) return;
+  // Adds or removes the currently open (done) job from Explore.
+  const shareVideo = useCallback(async (share) => {
+    if (!activeJobId) return;
     try {
-      await apiShareJob(activeJobId, true, profile.name);
-      setIsShared(true);
+      await apiShareJob(activeJobId, share, profile.name);
+      setIsShared(share);
     } catch (e) {
       console.error('share failed', e);
     }
-  }, [activeJobId, isShared, profile.name]);
+  }, [activeJobId, profile.name]);
 
   const newVideo = useCallback(() => {
     pendingDeleteJobIdRef.current = null;
