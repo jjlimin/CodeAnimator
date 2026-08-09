@@ -90,6 +90,9 @@ def lambda_handler(event, context):
             # Stored so DoneState can show the code that actually produced
             # this job's video, instead of whatever's live in the editor now.
             'user_code': {'S': user_code},
+            # Pipeline stage for the frontend's progress meter — advanced by
+            # AIAgentLambda (-> rendering) and concatVideosLambda (-> finishing).
+            'stage': {'S': 'script'},
         }
         # Only set user_id when authenticated, so it lands in the GSI.
         if user_id:

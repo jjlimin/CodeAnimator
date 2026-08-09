@@ -45,7 +45,11 @@ def lambda_handler(event, context):
                 "title": item.get('title', {}).get('S', ''),
                 "user_code": item.get('user_code', {}).get('S', ''),
                 "video_url": video_url,
-                "is_shared": item.get('is_shared', {}).get('S') == 'true'
+                "is_shared": item.get('is_shared', {}).get('S') == 'true',
+                # Real pipeline progress for the frontend's waiting-screen meter.
+                "stage": item.get('stage', {}).get('S', 'script'),
+                "scenes_done": int(item.get('scenes_done', {}).get('N', '0')),
+                "scenes_total": int(item.get('scenes_total', {}).get('N', '0')),
             })
         }
     except Exception as e:

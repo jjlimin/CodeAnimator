@@ -114,6 +114,25 @@ def _save_title(job_id: str, title: str) -> None:
         logger.exception("Job %s: failed to save AI-generated title", job_id)
 
 
+def _save_rendering_stage(job_id: str, total: int) -> None:
+    """Best-effort: mark the handoff to the rendering stage with the scene
+    count, so CheckStatusLambda can report real progress (stage +
+    scenes_done/scenes_total) instead of the frontend having to guess."""
+    try:
+        dynamodb.update_item(
+            TableName=TABLE_NAME,
+            Key={"job_id": {"S": job_id}},
+            UpdateExpression="SET stage = :st, scenes_total = :t, scenes_done = :d",
+            ExpressionAttributeValues={
+                ":st": {"S": "rendering"},
+                ":t": {"N": str(total)},
+                ":d": {"N": "0"},
+            },
+        )
+    except Exception:
+        logger.exception("Job %s: failed to save rendering stage", job_id)
+
+
 def _validate_scenes(scenes: list) -> list:
     """Validate the given scenes in place. Returns the scenes that failed,
     each annotated with 'error' and 'tier'."""
@@ -205,6 +224,7 @@ def lambda_handler(event, context):
         "Job %s: all %d scenes validated after %d correction rounds",
         job_id, len(scenes), rounds,
     )
+    _save_rendering_stage(job_id, len(scenes))
 
     # Deterministic post-processing: splice in the intro/step code display
     # now that every scene's own content has passed validation — the

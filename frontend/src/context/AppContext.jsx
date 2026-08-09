@@ -35,6 +35,10 @@ export function AppProvider({ children }) {
   const [isShared, setIsShared] = useState(false); // is the open (done) job on Explore
   const [codeError, setCodeError] = useState(''); // compile error when code is broken
   const [genPhase, setGenPhase] = useState('generating'); // checking | generating
+  // Real pipeline progress for the waiting-screen meter (see CheckStatusLambda).
+  const [stage, setStage] = useState('script'); // script | rendering | finishing
+  const [scenesDone, setScenesDone] = useState(0);
+  const [scenesTotal, setScenesTotal] = useState(0);
   const [activeJobId, setActiveJobId] = useState(null);
   const [videoUrl, setVideoUrl] = useState(null);
   const [currentTitle, setCurrentTitle] = useState('');
@@ -156,6 +160,10 @@ export function AppProvider({ children }) {
         // "still processing" job resumed after a page refresh — the editor
         // buffer otherwise still holds whatever was last typed, not this job's.
         if (data.user_code) setCode(data.user_code);
+        // Real pipeline progress (see CheckStatusLambda) for the waiting screen.
+        if (data.stage) setStage(data.stage);
+        if (typeof data.scenes_done === 'number') setScenesDone(data.scenes_done);
+        if (typeof data.scenes_total === 'number') setScenesTotal(data.scenes_total);
         if (data.status === 'COMPLETED' && data.video_url) {
           setVideoUrl(data.video_url);
           setIsShared(!!data.is_shared);
@@ -195,6 +203,9 @@ export function AppProvider({ children }) {
     setGenPhase('checking');
     setView('processing');
     setVideoUrl(null);
+    setStage('script');
+    setScenesDone(0);
+    setScenesTotal(0);
     try {
       const data = await generateVideo(code, complexity, mode);
       // Broken code and no choice made yet -> show the choice screen.
@@ -243,6 +254,9 @@ export function AppProvider({ children }) {
       setActiveJobId(job.job_id);
       setCurrentTitle(job.title);
       setGenPhase('generating');
+      setStage('script');
+      setScenesDone(0);
+      setScenesTotal(0);
       setView('processing');
     }
   }, []);
@@ -351,6 +365,9 @@ export function AppProvider({ children }) {
     setPage,
     view,
     genPhase,
+    stage,
+    scenesDone,
+    scenesTotal,
     isShared,
     shareVideo,
     videoUrl,

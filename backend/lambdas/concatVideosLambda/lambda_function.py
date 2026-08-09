@@ -28,7 +28,15 @@ def lambda_handler(event, context):
         raise ValueError("Missing job_id in event")
         
     print(f"Starting concatenation for job: {job_id}")
-    
+
+    # 0. שלב אחרון בפייפליין — מעדכנים כדי שמד ההתקדמות בפרונט יראה "מסיימים"
+    dynamodb.update_item(
+        TableName=TABLE_NAME,
+        Key={'job_id': {'S': job_id}},
+        UpdateExpression="SET stage = :st",
+        ExpressionAttributeValues={':st': {'S': 'finishing'}}
+    )
+
     # 1. שליפת רשימת כל הקבצים ששייכים ל-Job הזה ב-S3
     prefix = f"jobs/{job_id}/scenes/"
     response = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=prefix)

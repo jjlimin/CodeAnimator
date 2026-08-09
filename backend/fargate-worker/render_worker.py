@@ -7,10 +7,12 @@ from openai import OpenAI
 
 # Initialize AWS clients
 s3 = boto3.client('s3')
+dynamodb = boto3.client('dynamodb')
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 # Your globally unique bucket name
 BUCKET_NAME = 'code-animator-media-bucket-2026'
+TABLE_NAME = 'CodeAnimatorJobs'
 
 TTS_MODEL = os.environ.get('TTS_MODEL', 'gpt-4o-mini-tts')
 TTS_VOICE = os.environ.get('TTS_VOICE', 'alloy')
@@ -148,6 +150,18 @@ def main():
         s3_key,
         ExtraArgs={"ContentType": "video/mp4"}
     )
+
+    # 7. Best-effort: bump the job's rendered-scene counter for the frontend's
+    # progress meter. Never fail the task over this — the video already landed.
+    try:
+        dynamodb.update_item(
+            TableName=TABLE_NAME,
+            Key={'job_id': {'S': job_id}},
+            UpdateExpression='ADD scenes_done :incr',
+            ExpressionAttributeValues={':incr': {'N': '1'}},
+        )
+    except Exception as e:
+        print(f"Warning: failed to update scenes_done for job {job_id}: {e}")
 
     print("Render task completed successfully!")
 
