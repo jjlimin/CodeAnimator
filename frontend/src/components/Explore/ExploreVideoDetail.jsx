@@ -69,27 +69,27 @@ const ExploreVideoDetail = ({ jobId, onBack, onChanged }) => {
         <p className="text-gray-500">Loading...</p>
       ) : (
         <>
-          <div className="flex justify-between items-center gap-2">
-            <h2 className="text-2xl sm:text-3xl font-bold text-white truncate min-w-0">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+            <h2 className="text-xl sm:text-3xl font-bold text-white truncate min-w-0">
               {data.title || 'Untitled'}
             </h2>
             {isOwner ? (
               <button
                 onClick={handleRemove}
                 disabled={removing}
-                className="flex items-center gap-2 text-red-400 hover:text-red-300 transition-colors text-lg shrink-0 disabled:opacity-50"
+                className="self-start sm:self-auto flex items-center gap-2 text-red-400 hover:text-red-300 transition-colors text-sm sm:text-lg shrink-0 disabled:opacity-50"
               >
-                <Share2 size={20} /> {removing ? 'Removing...' : 'Remove from Explore'}
+                <Share2 size={18} className="sm:w-5 sm:h-5" /> {removing ? 'Removing...' : 'Remove from Explore'}
               </button>
             ) : (
               <button
                 onClick={handleSave}
                 disabled={saving || saved}
-                className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors text-lg shrink-0 disabled:opacity-50"
+                className="self-start sm:self-auto flex items-center gap-2 text-gray-300 hover:text-white transition-colors text-sm sm:text-lg shrink-0 disabled:opacity-50"
               >
                 {saved ? (
                   <>
-                    <Check size={20} className="text-green-400" /> Saved
+                    <Check size={18} className="sm:w-5 sm:h-5 text-green-400" /> Saved
                   </>
                 ) : (
                   <>{saving ? 'Saving...' : 'Save to my videos'}</>

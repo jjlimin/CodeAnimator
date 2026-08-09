@@ -12,7 +12,9 @@ const GeneratorPage = () => {
 
   return (
     <div className="flex flex-col h-full w-full">
-      <header className="flex items-center justify-between mb-8 w-full">
+      {/* Hidden on mobile — MainLayout's mobile top bar already shows the
+          logo + hamburger there, so this would just duplicate it. */}
+      <header className="hidden md:flex items-center justify-between mb-8 w-full">
         <div className="flex items-center gap-2">
           <img
             src="/logo.svg"

@@ -42,7 +42,7 @@ const Onboarding = () => {
             <Sparkles size={48} />
           </div>
           <div>
-            <h1 className="text-4xl font-bold mb-2">Welcome to CodeAnimator!</h1>
+            <h1 className="text-3xl sm:text-4xl font-bold mb-2">Welcome to CodeAnimator!</h1>
             <p className="text-gray-400 text-lg">First, what should we call you?</p>
           </div>
 

@@ -33,9 +33,9 @@ const ProcessingState = ({ onCancel }) => {
 
   return (
     <div className="flex flex-col items-center space-y-8 w-full">
-      <div className="flex justify-between items-center w-full mb-4 animate-fade-slide-up">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 w-full mb-4 animate-fade-slide-up">
         {checking ? (
-          <h2 className="text-5xl font-bold text-white mb-2">Checking your code...</h2>
+          <h2 className="text-3xl sm:text-5xl font-bold text-white mb-2">Checking your code...</h2>
         ) : (
           <p className="text-lg sm:text-xl font-medium text-white/80 tracking-wide">
             <span key={message} className="inline-block animate-fade-slide-up">
@@ -46,7 +46,7 @@ const ProcessingState = ({ onCancel }) => {
 
         <button
           onClick={onCancel}
-          className="bg-[#ef4444] hover:bg-red-600 text-white px-6 py-2 rounded-xl font-bold flex items-center gap-2 transition shrink-0"
+          className="self-start sm:self-auto bg-[#ef4444] hover:bg-red-600 text-white px-6 py-2 rounded-xl font-bold flex items-center gap-2 transition shrink-0"
         >
           <XCircle size={20} /> Cancel
         </button>
