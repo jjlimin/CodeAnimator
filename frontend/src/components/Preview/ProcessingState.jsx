@@ -53,7 +53,7 @@ const ProcessingState = ({ onCancel }) => {
       </div>
 
       <div
-        className="relative w-full aspect-video bg-gradient-to-br from-[#2d1b4e] to-[#121212] rounded-[2.5rem] flex flex-col items-center justify-center border border-white/10 shadow-[0_0_80px_-20px_rgba(139,92,246,0.5)] animate-fade-slide-up [animation-delay:120ms]"
+        className={`relative w-full ${checking ? 'aspect-video' : 'min-h-[22rem] sm:min-h-[26rem] py-8'} bg-gradient-to-br from-[#2d1b4e] to-[#121212] rounded-[2.5rem] flex flex-col items-center justify-center border border-white/10 shadow-[0_0_80px_-20px_rgba(139,92,246,0.5)] animate-fade-slide-up [animation-delay:120ms]`}
       >
         {checking ? (
           <>
