@@ -14,7 +14,7 @@ const GenFailed = () => {
       </div>
 
       <div>
-        <h2 className="text-4xl font-bold text-white mb-2">Video generation failed</h2>
+        <h2 className="text-3xl sm:text-4xl font-bold text-white mb-2">Video generation failed</h2>
         <p className="text-gray-400 text-lg">
           Something went wrong while creating your video. Please try again.
         </p>

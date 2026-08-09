@@ -42,9 +42,12 @@ const DoneState = ({ videoUrl, title, code, onRename, onEdit, isShared, onShare 
   return (
     <div className="flex flex-col space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700 w-full">
       <div className="min-w-0">
-        <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">Video generated successfully!</h2>
-        <div className="flex justify-between items-center gap-2">
-          <div className="flex items-center gap-2 text-gray-400 text-xl min-w-0">
+        <h2 className="text-xl sm:text-3xl font-bold text-white mb-2">Video generated successfully!</h2>
+        {/* Below sm: title row, then a 3-up row of icon+label chips (the old
+            single row with full button text overflowed at phone widths).
+            From sm up: original single-row layout. */}
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+          <div className="flex items-center gap-2 text-gray-400 text-lg sm:text-xl min-w-0">
             {editing ? (
               <>
                 <input
@@ -72,20 +75,30 @@ const DoneState = ({ videoUrl, title, code, onRename, onEdit, isShared, onShare 
             )}
           </div>
 
-          <div className="flex gap-6 shrink-0">
+          <div className="grid grid-cols-3 sm:flex gap-2 sm:gap-6 shrink-0">
             <button
               onClick={() => onShare(!isShared)}
-              className={`flex items-center gap-2 transition-colors text-lg ${
+              className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-2 py-2 sm:px-0 sm:py-0 rounded-xl sm:rounded-none bg-[#1e1e1e] sm:bg-transparent border sm:border-0 border-white/10 text-[11px] sm:text-lg transition-colors ${
                 isShared ? 'text-green-400 hover:text-red-400' : 'text-gray-300 hover:text-white'
               }`}
             >
-              <Share2 size={20} /> {isShared ? 'Remove from Explore' : 'Add to Explore'}
+              <Share2 size={18} className="sm:w-5 sm:h-5" />
+              <span className="text-center leading-tight">{isShared ? 'Remove' : 'Add to Explore'}</span>
             </button>
-            <button onClick={onEdit} className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors text-lg">
-              <Pencil size={20} /> Edit
+            <button
+              onClick={onEdit}
+              className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-2 py-2 sm:px-0 sm:py-0 rounded-xl sm:rounded-none bg-[#1e1e1e] sm:bg-transparent border sm:border-0 border-white/10 text-[11px] sm:text-lg text-gray-300 hover:text-white transition-colors"
+            >
+              <Pencil size={18} className="sm:w-5 sm:h-5" /> Edit
             </button>
-            <button onClick={handleDownload} disabled={downloading} className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors text-lg disabled:opacity-50">
-              <Download size={20} /> {downloading ? 'Downloading...' : 'Download'}
+            <button
+              onClick={handleDownload}
+              disabled={downloading}
+              className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-2 py-2 sm:px-0 sm:py-0 rounded-xl sm:rounded-none bg-[#1e1e1e] sm:bg-transparent border sm:border-0 border-white/10 text-[11px] sm:text-lg text-gray-300 hover:text-white transition-colors disabled:opacity-50"
+            >
+              <Download size={18} className="sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline">{downloading ? 'Downloading...' : 'Download'}</span>
+              <span className="sm:hidden">Download</span>
             </button>
           </div>
         </div>

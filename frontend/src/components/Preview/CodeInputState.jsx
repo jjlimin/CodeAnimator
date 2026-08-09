@@ -25,17 +25,19 @@ const CodeInputState = ({ code, setCode, error, onGenerate }) => {
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex flex-col h-full relative">
-      {/* Top header: greeting + explanation-depth selector */}
-      <div className="flex justify-between items-end mb-4 sm:mb-6 shrink-0 relative z-10">
+      {/* Top header: greeting + explanation-depth selector.
+          Stacks to a column below sm (the selector was getting squeezed
+          against the greeting on narrow screens); side-by-side from sm up. */}
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-4 sm:mb-6 shrink-0 relative z-10">
         <div>
           <p className="text-gray-400 text-sm sm:text-lg font-medium">Hi {firstName}!</p>
-          <h1 className="text-3xl sm:text-5xl font-bold mt-1 text-white tracking-tight">
+          <h1 className="text-2xl sm:text-5xl font-bold mt-1 text-white tracking-tight">
             Paste your code here
           </h1>
           <p className="text-gray-500 text-xs sm:text-sm mt-1">Python only, for now</p>
         </div>
-        
-        <div className="flex flex-col items-end gap-2">
+
+        <div className="flex flex-col items-start sm:items-end gap-2">
           {error && (
             <div className="bg-red-500/10 flex items-center px-3 py-1 sm:px-4 sm:py-1.5 rounded-md border border-red-500/30 shadow-inner">
               <span className="text-[10px] sm:text-xs text-red-400 font-medium select-none">
@@ -45,11 +47,11 @@ const CodeInputState = ({ code, setCode, error, onGenerate }) => {
           )}
 
           {/* Explanation-depth selector (drives the generation prompt) */}
-          <div className="flex flex-col items-end gap-1">
+          <div className="flex flex-col items-start sm:items-end gap-1 w-full sm:w-auto">
             <span className="text-[10px] sm:text-xs text-gray-500 font-medium uppercase tracking-wider">
               Explanation depth
             </span>
-            <div className="flex bg-[#1e1e1e] rounded-xl border border-white/10 p-1">
+            <div className="flex w-full sm:w-auto bg-[#1e1e1e] rounded-xl border border-white/10 p-1">
               {COMPLEXITY_OPTIONS.map((opt) => (
                 <button
                   key={opt.id}
@@ -60,7 +62,7 @@ const CodeInputState = ({ code, setCode, error, onGenerate }) => {
                       ? { backgroundImage: `linear-gradient(to right, ${from}, ${to})` }
                       : undefined
                   }
-                  className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+                  className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all ${
                     complexity === opt.id
                       ? 'text-white shadow'
                       : 'text-gray-400 hover:text-white'
@@ -74,8 +76,11 @@ const CodeInputState = ({ code, setCode, error, onGenerate }) => {
         </div>
       </div>
 
-      {/* Code editor panel — z-10 so it sits above the mascot behind it */}
-      <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden border border-white/10 shadow-2xl bg-[#1e1e1e] p-1 flex-1 min-h-[350px] z-10">
+      {/* Code editor panel — z-10 so it sits above the mascot behind it.
+          Below sm, the Generate button drops into normal flow (full width,
+          under the editor) instead of floating over it — there isn't enough
+          height on a phone to float it without covering code. */}
+      <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden border border-white/10 shadow-2xl bg-[#1e1e1e] p-1 flex-1 min-h-[280px] sm:min-h-[350px] z-10">
         <button
           className={`absolute top-4 right-4 sm:top-6 sm:right-6 z-20 p-2 rounded-lg border backdrop-blur-sm transition-all ${
             copied
@@ -88,7 +93,7 @@ const CodeInputState = ({ code, setCode, error, onGenerate }) => {
         </button>
 
         <Editor
-          height="calc(100vh - 320px)" 
+          height="100%"
           defaultLanguage="python"
           theme="vs-dark"
           value={code}
@@ -103,21 +108,35 @@ const CodeInputState = ({ code, setCode, error, onGenerate }) => {
           }}
         />
 
-        <div className="absolute bottom-6 right-6 sm:bottom-8 sm:right-8 z-20">
+        {/* Floating on sm+ only; the fade + full-width bottom padding it needs
+            would eat too much of a phone-sized editor. */}
+        <div className="hidden sm:block absolute bottom-8 right-8 z-20">
           <button
             onClick={onGenerate}
             style={{
               backgroundImage: `linear-gradient(to right, ${from}, ${to})`,
               boxShadow: `0 10px 50px -10px rgba(${shadowRgb},0.7)`,
             }}
-            className="hover:brightness-125 text-white px-8 py-3 sm:px-12 sm:py-4 rounded-xl sm:rounded-2xl font-bold text-base sm:text-xl transition-all active:scale-95"
+            className="hover:brightness-125 text-white px-12 py-4 rounded-2xl font-bold text-xl transition-all active:scale-95"
           >
             Generate Video
           </button>
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 h-24 sm:h-32 bg-gradient-to-t from-[#1e1e1e] to-transparent pointer-events-none z-10 opacity-70"></div>
+        <div className="hidden sm:block absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[#1e1e1e] to-transparent pointer-events-none z-10 opacity-70"></div>
       </div>
+
+      {/* Mobile-only: full-width Generate button below the editor. */}
+      <button
+        onClick={onGenerate}
+        style={{
+          backgroundImage: `linear-gradient(to right, ${from}, ${to})`,
+          boxShadow: `0 10px 50px -10px rgba(${shadowRgb},0.7)`,
+        }}
+        className="sm:hidden mt-4 w-full hover:brightness-125 text-white px-8 py-3 rounded-xl font-bold text-base transition-all active:scale-95 shrink-0"
+      >
+        Generate Video
+      </button>
       {/* Mascot moved to MainLayout so it stays visible during generation. */}
     </div>
   );

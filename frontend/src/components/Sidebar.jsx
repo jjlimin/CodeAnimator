@@ -14,6 +14,10 @@ import {
 import { useApp } from '../context/AppContext';
 import { MASCOT_COLORS, swatchForMascot } from '../mascotColors';
 
+// Below md, the sidebar renders off-canvas (fixed, translated out of view)
+// and is opened via `mobileOpen` from the hamburger in MainLayout's mobile
+// top bar; at md+ it sits in normal flow like before, unaffected by that prop.
+
 const StatusDot = ({ status }) => {
   const color =
     status === 'COMPLETED' ? 'bg-green-500'
@@ -22,7 +26,7 @@ const StatusDot = ({ status }) => {
   return <span className={`w-2 h-2 rounded-full shrink-0 ${color}`} />;
 };
 
-const Sidebar = () => {
+const Sidebar = ({ mobileOpen = false, onCloseMobile = () => {} }) => {
   const { profile, jobs, openJob, renameJob, deleteJob, newVideo, signOut, mascotColor, saveMascotColor, page, setPage } = useApp();
   const [isOpen, setIsOpen] = useState(true);
   const [editingId, setEditingId] = useState(null);
@@ -40,60 +44,88 @@ const Sidebar = () => {
     setEditingId(null);
   };
 
+  // Nav actions close the mobile drawer too (no-op at md+, no `onCloseMobile` needed there).
+  const goNewVideo = () => { newVideo(); onCloseMobile(); };
+  const goExplore = () => { setPage('explore'); onCloseMobile(); };
+  const goOpenJob = (job) => { openJob(job); onCloseMobile(); };
+
   const displayName = profile.name || profile.email || 'My account';
 
   return (
-    <aside
-      className={`${isOpen ? 'w-64' : 'w-20'} bg-[#1a1a1a] h-full flex flex-col border-r border-white/5 text-gray-300 transition-all duration-300 ease-in-out`}
-    >
-      <div className={`p-4 flex items-center ${isOpen ? 'justify-between' : 'justify-center'} mb-6`}>
-        {isOpen && (
-          <div className="flex items-center gap-3 animate-in fade-in duration-300 min-w-0">
-            <div className="shrink-0 transition-colors duration-300" style={{ color: swatchForMascot(mascotColor) }}>
-              <UserCircle size={32} />
+    <>
+      {/* Backdrop — mobile only, shown while the drawer is open */}
+      {mobileOpen && (
+        <div
+          className="md:hidden fixed inset-0 bg-black/60 z-40"
+          onClick={onCloseMobile}
+          aria-hidden="true"
+        />
+      )}
+
+      <aside
+        className={`${isOpen ? 'w-64' : 'w-20'} fixed md:static inset-y-0 left-0 z-50 md:z-auto
+        ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0
+        bg-[#1a1a1a] h-full flex flex-col border-r border-white/5 text-gray-300 transition-all duration-300 ease-in-out`}
+      >
+        <div className={`p-4 flex items-center ${isOpen ? 'justify-between' : 'justify-center'} mb-6`}>
+          {isOpen && (
+            <div className="flex items-center gap-3 animate-in fade-in duration-300 min-w-0">
+              <div className="shrink-0 transition-colors duration-300" style={{ color: swatchForMascot(mascotColor) }}>
+                <UserCircle size={32} />
+              </div>
+              <span className="font-semibold text-white truncate" title={profile.email}>
+                {displayName}
+              </span>
             </div>
-            <span className="font-semibold text-white truncate" title={profile.email}>
-              {displayName}
-            </span>
-          </div>
-        )}
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="hover:bg-white/10 p-2 rounded-xl transition-colors text-gray-400 hover:text-white"
-        >
-          <Menu size={20} />
-        </button>
-      </div>
-
-      <nav className="px-2 space-y-1 mb-8">
-        <button
-          onClick={newVideo}
-          className={`w-full flex items-center ${isOpen ? 'justify-start px-4' : 'justify-center'} py-3 hover:bg-white/5 rounded-xl transition-all group`}
-          title={!isOpen ? 'New Video' : ''}
-        >
-          <span className={`${isOpen ? 'mr-3' : ''} text-gray-400 group-hover:text-violet-400 transition-colors`}>
-            <PlusCircle size={20} />
-          </span>
-          {isOpen && <span className="text-sm font-medium">New Video</span>}
-        </button>
-
-        <button
-          onClick={() => setPage('explore')}
-          className={`w-full flex items-center ${isOpen ? 'justify-start px-4' : 'justify-center'} py-3 hover:bg-white/5 rounded-xl transition-all group ${
-            page === 'explore' ? 'text-violet-400' : ''
-          }`}
-          title={!isOpen ? 'Explore' : ''}
-        >
-          <span
-            className={`${isOpen ? 'mr-3' : ''} transition-colors ${
-              page === 'explore' ? 'text-violet-400' : 'text-gray-400 group-hover:text-violet-400'
-            }`}
+          )}
+          {/* Mobile: close the drawer. Desktop: collapse to icon rail. Two
+              buttons (rather than one branching on window width) so it stays
+              correct across resizes/rotation without a resize listener. */}
+          <button
+            onClick={onCloseMobile}
+            className="md:hidden hover:bg-white/10 p-2 rounded-xl transition-colors text-gray-400 hover:text-white"
+            aria-label="Close menu"
           >
-            <Compass size={20} />
-          </span>
-          {isOpen && <span className="text-sm font-medium">Explore</span>}
-        </button>
-      </nav>
+            <X size={20} />
+          </button>
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="hidden md:block hover:bg-white/10 p-2 rounded-xl transition-colors text-gray-400 hover:text-white"
+            aria-label="Toggle sidebar"
+          >
+            <Menu size={20} />
+          </button>
+        </div>
+
+        <nav className="px-2 space-y-1 mb-8">
+          <button
+            onClick={goNewVideo}
+            className={`w-full flex items-center ${isOpen ? 'justify-start px-4' : 'justify-center'} py-3 hover:bg-white/5 rounded-xl transition-all group`}
+            title={!isOpen ? 'New Video' : ''}
+          >
+            <span className={`${isOpen ? 'mr-3' : ''} text-gray-400 group-hover:text-violet-400 transition-colors`}>
+              <PlusCircle size={20} />
+            </span>
+            {isOpen && <span className="text-sm font-medium">New Video</span>}
+          </button>
+
+          <button
+            onClick={goExplore}
+            className={`w-full flex items-center ${isOpen ? 'justify-start px-4' : 'justify-center'} py-3 hover:bg-white/5 rounded-xl transition-all group ${
+              page === 'explore' ? 'text-violet-400' : ''
+            }`}
+            title={!isOpen ? 'Explore' : ''}
+          >
+            <span
+              className={`${isOpen ? 'mr-3' : ''} transition-colors ${
+                page === 'explore' ? 'text-violet-400' : 'text-gray-400 group-hover:text-violet-400'
+              }`}
+            >
+              <Compass size={20} />
+            </span>
+            {isOpen && <span className="text-sm font-medium">Explore</span>}
+          </button>
+        </nav>
 
       <div className={`px-4 flex-1 overflow-y-auto scrollbar-hide ${!isOpen && 'hidden'}`}>
         <div className="flex items-center justify-between mb-4">
@@ -108,7 +140,7 @@ const Sidebar = () => {
           {jobs.map((job) => (
             <div
               key={job.job_id}
-              onClick={() => editingId !== job.job_id && openJob(job)}
+              onClick={() => editingId !== job.job_id && goOpenJob(job)}
               className="flex items-center gap-2 px-2 py-2 hover:bg-white/5 rounded-lg cursor-pointer group transition"
             >
               <StatusDot status={job.status} />
@@ -203,7 +235,8 @@ const Sidebar = () => {
           {isOpen && <span className="text-sm font-medium">Sign out</span>}
         </button>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 };
 

@@ -14,7 +14,7 @@ const CodeErrorChoice = () => {
       </div>
 
       <div>
-        <h2 className="text-4xl font-bold text-white mb-2">Your code has an issue</h2>
+        <h2 className="text-3xl sm:text-4xl font-bold text-white mb-2">Your code has an issue</h2>
         <p className="text-gray-400 text-lg">It doesn't compile, so we can't run it as-is.</p>
       </div>
 
