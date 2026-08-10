@@ -527,6 +527,7 @@ component remounts. Notable behaviors:
 | `title` | S | `createJobLambda` (placeholder date/time) → `AIAgentLambda` (AI-generated, overwrites) → `renameJobLambda` (user override) | |
 | `user_code` | S | `createJobLambda` | Snapshot of the exact code that produced this job — decouples the stored job from whatever the editor buffer holds later. |
 | `user_id` | S | `createJobLambda` (only if authenticated — always true in practice since the API requires a JWT) | Cognito `sub` claim; GSI partition key. |
+| `user_email` | S | `createJobLambda` (only if the `email` claim is present on the ID token) | Cognito `email` claim; display-only (e.g. AWS console) — not used for auth, ownership checks, or the GSI. |
 | `video_url` | S | `concatVideosLambda` | The permanent (non-presigned) S3 URL; converted to a presigned URL on every read by `CheckStatusLambda`/`listJobsLambda`. |
 
 **GSI**: `user_id-created_at-index` (partition `user_id`, sort `created_at`)
