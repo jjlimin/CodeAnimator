@@ -19,6 +19,15 @@ def get_user_id(event):
         return None
 
 
+def get_user_email(event):
+    # Display-only convenience (e.g. reading the AWS console) — not used for
+    # auth or ownership checks, so a missing claim is not an error.
+    try:
+        return event['requestContext']['authorizer']['jwt']['claims'].get('email')
+    except (KeyError, TypeError):
+        return None
+
+
 def default_title():
     return datetime.now(timezone.utc).strftime('%d/%m/%Y %H:%M UTC')
 
@@ -77,6 +86,7 @@ def lambda_handler(event, context):
 
         job_id = str(uuid.uuid4())
         user_id = get_user_id(event)
+        user_email = get_user_email(event)
         title = (body.get('title') or '').strip() or default_title()
         # Requested explanation depth from the UI; AIAgent uses it in the prompt.
         complexity = body.get('complexity') or 'balanced'
@@ -97,6 +107,9 @@ def lambda_handler(event, context):
         # Only set user_id when authenticated, so it lands in the GSI.
         if user_id:
             item['user_id'] = {'S': user_id}
+        # Display-only (console/debugging) — not used for auth or the GSI.
+        if user_email:
+            item['user_email'] = {'S': user_email}
 
         dynamodb.put_item(TableName=TABLE_NAME, Item=item)
 
