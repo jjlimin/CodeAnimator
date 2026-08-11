@@ -112,6 +112,17 @@ source, guaranteeing it is always shown correctly.
      touch or bleed off the screen border.
    - Keep it minimal, clean, and aligned: one or two short, purposeful
      elements per scene, not a scattered collage. Clarity over decoration.
+   - Position from the object, not a guess: any pointer, arrow, or label
+     tied to a specific element of a structure you drew (an array box, a
+     node, ...) must derive its position from that element's own mobject —
+     e.g. `.next_to(boxes[i], DOWN)` or `boxes[i].get_center()` — never a
+     hand-picked coordinate. If the index changes within the same scene
+     (each loop pass), move the SAME pointer mobject with
+     `.animate.move_to(...)`; do not create a new pointer per step.
+   - Replace the value, don't stack it: keep at most ONE Text mobject per
+     tracked variable. When its value changes, `Transform(old, new)` (or
+     `.animate.become(...)`) that same mobject in place — never `FadeIn`
+     or `Write` a second value while the first is still visible on screen.
 
 ## Reference examples — model these techniques, not this exact code
 Two excerpts at the animation quality expected for a step scene's own
@@ -168,6 +179,45 @@ Good because: the array is real boxes with index pointers that could move
 (`.animate.move_to(...)`) between steps, a comparison is shown by
 highlighting stroke color rather than described in prose, and `Swap(...)` —
 a real animation — moves the values, instead of redrawing text in place.
+
+Example — a moving loop pointer with a value that gets reassigned:
+```python
+values = [4, 2, 5, 7]
+boxes = VGroup(*[
+    Square(side_length=0.8, fill_color=BLUE_E, fill_opacity=0.5) for _ in values
+]).arrange(RIGHT, buff=0.3).move_to(DOWN * 2)
+labels = VGroup(*[
+    Text(str(v), font_size=28).move_to(b.get_center()) for v, b in zip(values, boxes)
+])
+self.play(FadeIn(boxes), FadeIn(labels))
+
+pointer = Arrow(DOWN, UP, color=YELLOW, buff=0.1).next_to(boxes[0], DOWN, buff=0.2)
+name = Text("num", font_size=24, color=YELLOW).next_to(pointer, DOWN, buff=0.15)
+self.play(FadeIn(pointer), FadeIn(name))
+
+value = Text(str(values[0]), font_size=32, color=YELLOW).next_to(pointer, UP, buff=0.3)
+self.play(Write(value))
+
+# num = num ** 2 — reassign in place, don't add a second value mobject
+new_value = Text(str(values[0] ** 2), font_size=32, color=YELLOW).move_to(value)
+self.play(Transform(value, new_value))
+self.wait(0.4)
+
+# next iteration — move the SAME pointer/name/value, don't recreate them
+self.play(
+    pointer.animate.next_to(boxes[1], DOWN, buff=0.2),
+    name.animate.next_to(boxes[1], DOWN, buff=0.55),
+    run_time=0.4,
+)
+self.play(Transform(value, Text(str(values[1]), font_size=32, color=YELLOW).next_to(pointer, UP, buff=0.3)))
+self.wait(0.4)
+```
+Good because: the pointer's position always comes from `boxes[i]`, not a
+guessed coordinate, so it stays aligned with the element it refers to; the
+SAME `pointer`/`name`/`value` mobjects are reused and moved/transformed
+across iterations instead of spawning new copies; and a reassignment
+(`num ** 2`) transforms the existing value in place, so the old number is
+never left on screen next to the new one.
 
 Return the scenes in narrative order with sequential integer `scene_id` starting at 1.
 
