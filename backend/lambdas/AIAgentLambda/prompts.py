@@ -113,6 +113,62 @@ source, guaranteeing it is always shown correctly.
    - Keep it minimal, clean, and aligned: one or two short, purposeful
      elements per scene, not a scattered collage. Clarity over decoration.
 
+## Reference examples — model these techniques, not this exact code
+Two excerpts at the animation quality expected for a step scene's own
+content. Never copy a title or a `Code(...)` call from these — that part of
+the originals is exactly what the automatic code display already replaces.
+Treat them as technique references: invent your own values/labels to fit
+the actual code being explained, and keep everything below y = 0 as above.
+
+Example — tracing a reference/pointer (e.g. explaining `b = a`):
+```python
+box = Square(side_length=0.7, stroke_color=WHITE, fill_color=DARK_GRAY, fill_opacity=0.6)
+value = Text("3", font_size=24).move_to(box.get_center())
+obj = VGroup(box, value).move_to(DOWN * 2 + RIGHT * 1.5)
+
+var_a = Text("a", font_size=28, color=YELLOW).move_to(DOWN * 1.2 + LEFT * 2)
+pointer_a = Arrow(var_a.get_right(), obj.get_left(), color=YELLOW, buff=0.15)
+var_b = Text("b", font_size=28, color=ORANGE).move_to(DOWN * 3.2 + LEFT * 2)
+pointer_b = Arrow(var_b.get_right(), obj.get_bottom(), color=ORANGE, buff=0.15)
+
+self.play(FadeIn(obj), FadeIn(var_a), GrowArrow(pointer_a))
+self.wait(0.4)
+self.play(FadeIn(var_b), GrowArrow(pointer_b))
+self.play(pointer_a.animate.set_color(GREEN), pointer_b.animate.set_color(GREEN), run_time=0.4)
+self.wait(0.6)
+```
+Good because: a real `Arrow` shows the relationship instead of a sentence
+describing it, `GrowArrow` introduces each pointer as its own beat, and the
+later `.animate.set_color(...)` traces which variable is active — three
+distinct animation beats, not one fade-and-hold.
+
+Example — comparing and swapping two array elements:
+```python
+values = [5, 2, 8]
+boxes = VGroup(*[
+    Square(side_length=0.9, fill_color=BLUE_E, fill_opacity=0.5) for _ in values
+]).arrange(RIGHT, buff=0.3).move_to(DOWN * 1.4)
+labels = VGroup(*[
+    Text(str(v), font_size=28).move_to(b.get_center()) for v, b in zip(values, boxes)
+])
+self.play(FadeIn(boxes), FadeIn(labels))
+
+pointer_j = Arrow(DOWN, UP, color=YELLOW, buff=0.1).next_to(boxes[0], DOWN, buff=0.2)
+pointer_k = Arrow(DOWN, UP, color=ORANGE, buff=0.1).next_to(boxes[1], DOWN, buff=0.2)
+self.play(FadeIn(pointer_j), FadeIn(pointer_k))
+
+self.play(boxes[0].animate.set_stroke(YELLOW, width=4),
+          boxes[1].animate.set_stroke(ORANGE, width=4), run_time=0.3)
+self.play(Swap(labels[0], labels[1]), run_time=0.7)
+self.play(boxes[0].animate.set_stroke(WHITE, width=2),
+          boxes[1].animate.set_stroke(WHITE, width=2), run_time=0.3)
+self.wait(0.4)
+```
+Good because: the array is real boxes with index pointers that could move
+(`.animate.move_to(...)`) between steps, a comparison is shown by
+highlighting stroke color rather than described in prose, and `Swap(...)` —
+a real animation — moves the values, instead of redrawing text in place.
+
 Return the scenes in narrative order with sequential integer `scene_id` starting at 1.
 
 ## Video title
