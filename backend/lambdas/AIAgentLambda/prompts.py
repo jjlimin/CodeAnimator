@@ -55,23 +55,25 @@ logical sequence of short animated scenes with voice narration.
   the input: a simple high-level pass might need only 2 scenes; a detailed
   walkthrough of a complex algorithm might need 6+.
 
-## Loops that repeat many times — first passes, fast-forward, last pass, result
-If the code has a loop (or nested loops) that would repeat many times over
-the same data (a sort, a search, a simulation, ...), never create a scene
-per pass — that is slow and repetitive to watch, and never just stop after
-a few passes either — the viewer must see the run actually finish. Cover
-the FULL run, first iteration to last, structured as:
-1. Animate the first TWO iterations concretely, narrated, with real values
-   — one iteration alone is not enough to establish the pattern.
-2. Fast-forward through the remaining MIDDLE iterations in a single scene
-   with NO per-iteration narration — this scene's narration should be one
-   short line like "this repeats for the rest of the data," while the
-   animation itself moves quickly through the remaining steps (short
-   `run_time`s, minimal `self.wait`) rather than describing each one.
-3. Animate the LAST iteration concretely, narrated, the same way as the
-   first two — don't let the run just trail off into the fast-forward.
-4. Finish with a scene showing the final result/state the loop produces
-   (e.g. the fully sorted array), so the viewer sees where it ends up.
+## Loops that repeat many times — full dry run for long-form code, kept fast
+If a loop (or nested loops) would repeat many times over the same data (a
+sort, a search, a simulation, ...), never create a scene per pass — that is
+slow and repetitive to watch. How to cover it depends on whether this job
+is long-form (see "Visual flow" below — no per-step code snippet, whole
+frame available):
+- **Long-form**: animate the COMPLETE run — every iteration, first to
+  last, never skip or summarize the middle. Keep it watchable by making
+  each iteration's own animation FAST (short `run_time`s, e.g. 0.2-0.5s per
+  sub-step: a highlight, a compare, a swap — not a long pause per
+  iteration), not by leaving anything out. This dry-run scene may run far
+  longer than the usual 10-30s — total video length for this kind of job
+  may run up to 5 minutes if the algorithm genuinely needs it. Narration
+  doesn't need to describe every individual step — a short overview line
+  is enough; let the fast, complete visual carry the detail.
+- **Everything else**: animate the first THREE iterations concretely with
+  real values, narrate that the same pattern continues for the rest, then
+  finish with the final result/state — normal pacing (scene length roughly
+  matches narration) applies throughout.
 
 ## Infinite or unbounded loops
 If a loop has no reachable termination given the code shown (e.g.
@@ -100,7 +102,9 @@ set to False elsewhere").
 - Keep animations simple: Text, MathTex, shapes, arrows, transforms,
   highlighting. No external files, no images, no SVGs, no network access.
 - The on-screen animation of a scene should roughly match its narration length
-  (use `self.wait(...)` to pad where needed).
+  (use `self.wait(...)` to pad where needed) — except a long-form dry-run
+  scene (see "Loops that repeat many times" above), where the fast, complete
+  visual may run longer than the narration itself.
 - Code must be immediately runnable — it will be compiled and executed for
   validation before rendering.
 
@@ -454,8 +458,20 @@ def _numbered_code(user_code: str) -> str:
     return "\n".join(f"{i:>{width}}  {line}" for i, line in enumerate(lines, start=1))
 
 
-def build_generation_user_message(user_code: str, complexity: str = DEFAULT_COMPLEXITY) -> str:
+LONG_FORM_DURATION_OVERRIDE = (
+    "This input is long-form (see the system prompt's loop-coverage rule) — "
+    "the requested-depth duration above is a FLOOR, not a cap, for this job: "
+    "cover the algorithm's complete execution without skipping iterations, "
+    "and let the video run as long as that genuinely takes, up to 5 minutes."
+)
+
+
+def build_generation_user_message(
+    user_code: str, complexity: str = DEFAULT_COMPLEXITY, long_form: bool = False
+) -> str:
     directive = COMPLEXITY_DIRECTIVES.get(complexity, COMPLEXITY_DIRECTIVES[DEFAULT_COMPLEXITY])
+    if long_form:
+        directive = f"{directive}\n\n{LONG_FORM_DURATION_OVERRIDE}"
     return (
         f"{directive}\n\n"
         "Explain this code (line numbers below are for `active_lines` "

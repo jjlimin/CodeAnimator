@@ -82,15 +82,16 @@ def _call_openai(system_prompt: str, user_message: str, schema: dict) -> dict:
 
 
 def _generate_scenes(user_code: str, complexity: str, mode=None, code_error=None) -> tuple:
+    # Deterministic (not model-decided): long/complex input skips the
+    # per-step code snippet entirely, gets a duration-cap override so it can
+    # cover a full dry run, and switches the loop-coverage rule from
+    # skip-ahead to complete-but-fast (see prompts.py).
+    long_form = is_long_form(user_code)
     # explain_bug: keep the broken code on screen and explain how to fix it.
     if mode == "explain_bug":
         user_message = build_buggy_generation_user_message(user_code, code_error or "", complexity)
     else:
-        user_message = build_generation_user_message(user_code, complexity)
-    # Deterministic (not model-decided): long/complex input skips the
-    # per-step code snippet entirely, freeing the whole frame for a pure
-    # "watch it run" visualization instead of cramming a code box in too.
-    long_form = is_long_form(user_code)
+        user_message = build_generation_user_message(user_code, complexity, long_form)
     system_prompt = build_generation_system_prompt(long_form)
     result = _call_openai(system_prompt, user_message, GENERATION_SCHEMA)
     scenes = result["scenes"]
