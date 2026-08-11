@@ -32,11 +32,12 @@ from prompts import (
     CORRECTION_SCHEMA,
     CORRECTION_SYSTEM_PROMPT,
     GENERATION_SCHEMA,
-    GENERATION_SYSTEM_PROMPT,
     build_correction_user_message,
+    build_generation_system_prompt,
     build_generation_user_message,
     build_buggy_generation_user_message,
     inject_code_display,
+    is_long_form,
 )
 from validator import MANIM_AVAILABLE, validate_scene
 
@@ -86,14 +87,19 @@ def _generate_scenes(user_code: str, complexity: str, mode=None, code_error=None
         user_message = build_buggy_generation_user_message(user_code, code_error or "", complexity)
     else:
         user_message = build_generation_user_message(user_code, complexity)
-    result = _call_openai(GENERATION_SYSTEM_PROMPT, user_message, GENERATION_SCHEMA)
+    # Deterministic (not model-decided): long/complex input skips the
+    # per-step code snippet entirely, freeing the whole frame for a pure
+    # "watch it run" visualization instead of cramming a code box in too.
+    long_form = is_long_form(user_code)
+    system_prompt = build_generation_system_prompt(long_form)
+    result = _call_openai(system_prompt, user_message, GENERATION_SCHEMA)
     scenes = result["scenes"]
     if not scenes:
         raise ValueError("Model returned zero scenes")
     # Generous safety cap only — the prompt asks for ~10-15 chars, this just
     # guards against a runaway response, not the intended length.
     title = (result.get("title") or "").strip()[:40]
-    return title, scenes
+    return title, scenes, long_form
 
 
 def _save_title(job_id: str, title: str) -> None:
@@ -177,9 +183,12 @@ def lambda_handler(event, context):
         job_id, MODEL, complexity, mode, MANIM_AVAILABLE, MAX_RETRIES,
     )
 
-    title, scenes = _generate_scenes(user_code, complexity, mode, code_error)
+    title, scenes, long_form = _generate_scenes(user_code, complexity, mode, code_error)
     scenes.sort(key=lambda s: s["scene_id"])
-    logger.info("Job %s: model produced %d scenes, title=%r", job_id, len(scenes), title)
+    logger.info(
+        "Job %s: model produced %d scenes, title=%r, long_form=%s",
+        job_id, len(scenes), title, long_form,
+    )
     _save_title(job_id, title)
 
     scenes_by_id = {s["scene_id"]: s for s in scenes}
@@ -232,7 +241,7 @@ def lambda_handler(event, context):
     # boilerplate. Sanity-checked with ast.parse since this step is not
     # itself covered by the validator.
     for scene in scenes:
-        scene["manim_code"] = inject_code_display(scene["manim_code"], user_code, scene)
+        scene["manim_code"] = inject_code_display(scene["manim_code"], user_code, scene, long_form=long_form)
         try:
             ast.parse(scene["manim_code"])
         except SyntaxError as e:
