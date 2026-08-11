@@ -410,6 +410,61 @@ CORRECTION_SCHEMA = {
     },
 }
 
+# ---------------------------------------------------------------------------
+# Pattern-matched narration — used only when pattern_library.match_pattern()
+# finds and verifies a known algorithm shape (see pattern_library.py). The
+# animation code is already fixed (a hand-vetted template, not LLM-authored)
+# so this prompt asks for narration text only, nothing else.
+# ---------------------------------------------------------------------------
+
+PATTERN_NARRATION_SYSTEM_PROMPT = """\
+You are a Python educator writing narration for a pre-built animation.
+
+The visualization for this video is already written and fixed — you are
+NOT writing any Manim code, only narration text for two scenes:
+
+1. `intro_narration`: preface/overview for the intro scene (the system
+   shows the user's full source code on screen automatically while this
+   plays) — what the algorithm does, in general terms. 15-30 seconds
+   (40-75 words).
+2. `dry_run_narration`: narration for the scene that visually runs the
+   full algorithm on a small example array from start to finish (every
+   comparison and swap, fast-paced) — a short overview of what to watch
+   for (e.g. "watch the two pointers compare neighbors and swap them when
+   they're out of order, sweeping through the array pass after pass until
+   it's sorted"). Do NOT narrate individual comparisons or swaps one by
+   one — the animation is fast and self-explanatory; describe the pattern
+   once. 15-30 seconds (40-75 words).
+
+Also produce a short `title`: 10-15 characters, in English, Title Case, no
+trailing punctuation, naming what the algorithm does (e.g. "Bubble Sort").
+"""
+
+PATTERN_NARRATION_SCHEMA = {
+    "type": "json_schema",
+    "name": "pattern_narration",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "properties": {
+            "title": {"type": "string"},
+            "intro_narration": {"type": "string"},
+            "dry_run_narration": {"type": "string"},
+        },
+        "required": ["title", "intro_narration", "dry_run_narration"],
+        "additionalProperties": False,
+    },
+}
+
+
+def build_pattern_narration_user_message(user_code: str, pattern_name: str) -> str:
+    return (
+        f"The user's code implements: {pattern_name.replace('_', ' ')}.\n\n"
+        "Original source (shown automatically in the intro, for your "
+        "context only — do not transcribe it):\n\n"
+        f"```python\n{user_code}\n```"
+    )
+
 
 # Requested-depth directives, chosen by the user in the UI. Controls the total
 # length and how deep the explanation goes. Default is "balanced".
