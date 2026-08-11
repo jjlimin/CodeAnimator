@@ -28,14 +28,18 @@ import os
 import boto3
 from openai import OpenAI
 
+from pattern_library import match_pattern
 from prompts import (
     CORRECTION_SCHEMA,
     CORRECTION_SYSTEM_PROMPT,
     GENERATION_SCHEMA,
+    PATTERN_NARRATION_SCHEMA,
+    PATTERN_NARRATION_SYSTEM_PROMPT,
     build_correction_user_message,
     build_generation_system_prompt,
     build_generation_user_message,
     build_buggy_generation_user_message,
+    build_pattern_narration_user_message,
     inject_code_display,
     is_long_form,
 )
@@ -82,15 +86,33 @@ def _call_openai(system_prompt: str, user_message: str, schema: dict) -> dict:
 
 
 def _generate_scenes(user_code: str, complexity: str, mode=None, code_error=None) -> tuple:
+    # Deterministic (not model-decided): long/complex input skips the
+    # per-step code snippet entirely, freeing the whole frame for a pure
+    # "watch it run" visualization instead of cramming a code box in too.
+    long_form = is_long_form(user_code)
+
+    # For a known, verified algorithm shape (see pattern_library.py), skip
+    # free-form generation entirely: the animation is a hand-vetted
+    # template, not LLM-authored, so only narration is asked for. A
+    # structural near-miss or a failed behavioral check falls through to
+    # the normal path below exactly as if nothing had matched.
+    matched = match_pattern(user_code) if (long_form and mode != "explain_bug") else None
+    if matched:
+        logger.info("Job: pattern matched (%s), using template + narration-only generation", matched.name)
+        result = _call_openai(
+            PATTERN_NARRATION_SYSTEM_PROMPT,
+            build_pattern_narration_user_message(user_code, matched.name),
+            PATTERN_NARRATION_SCHEMA,
+        )
+        title = (result.get("title") or "").strip()[:40]
+        scenes = matched.build_scenes(result["intro_narration"], result["dry_run_narration"])
+        return title, scenes, long_form
+
     # explain_bug: keep the broken code on screen and explain how to fix it.
     if mode == "explain_bug":
         user_message = build_buggy_generation_user_message(user_code, code_error or "", complexity)
     else:
         user_message = build_generation_user_message(user_code, complexity)
-    # Deterministic (not model-decided): long/complex input skips the
-    # per-step code snippet entirely, freeing the whole frame for a pure
-    # "watch it run" visualization instead of cramming a code box in too.
-    long_form = is_long_form(user_code)
     system_prompt = build_generation_system_prompt(long_form)
     result = _call_openai(system_prompt, user_message, GENERATION_SCHEMA)
     scenes = result["scenes"]
