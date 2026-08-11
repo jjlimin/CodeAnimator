@@ -1,12 +1,46 @@
 """System prompts and JSON schemas for the Manim scene-generation agent."""
 
+import ast
 import textwrap
 
 # ---------------------------------------------------------------------------
 # Generation
 # ---------------------------------------------------------------------------
 
-GENERATION_SYSTEM_PROMPT = """\
+LONG_FORM_LINE_THRESHOLD = 15
+
+
+def is_long_form(user_code: str) -> bool:
+    """Heuristic, deterministic (no model judgment): true when the input is
+    complex/long enough that a per-step code snippet on every scene would
+    clutter more than help — a loop nested inside another loop, or more
+    than LONG_FORM_LINE_THRESHOLD non-blank/non-comment lines. Drives
+    whether step scenes get the automatic code snippet at all (see
+    inject_code_display) and which zone-guidance text the model sees
+    (build_generation_system_prompt)."""
+    try:
+        tree = ast.parse(user_code)
+    except SyntaxError:
+        return False
+
+    max_loop_depth = 0
+
+    def _walk(node, depth):
+        nonlocal max_loop_depth
+        for child in ast.iter_child_nodes(node):
+            child_depth = depth + 1 if isinstance(child, (ast.For, ast.While)) else depth
+            max_loop_depth = max(max_loop_depth, child_depth)
+            _walk(child, child_depth)
+
+    _walk(tree, 0)
+    nonblank = [
+        ln for ln in user_code.split("\n")
+        if ln.strip() and not ln.strip().startswith("#")
+    ]
+    return max_loop_depth >= 2 or len(nonblank) > LONG_FORM_LINE_THRESHOLD
+
+
+_GENERATION_PROMPT_TEMPLATE = """\
 You are an expert Manim Community Edition (ManimCE) animation developer and Python educator.
 
 The user will provide a Python code snippet. Break the explanation of this code into a
@@ -21,17 +55,33 @@ logical sequence of short animated scenes with voice narration.
   the input: a simple high-level pass might need only 2 scenes; a detailed
   walkthrough of a complex algorithm might need 6+.
 
-## Loops that repeat many times — dry-run a few passes, then skip ahead
+## Loops that repeat many times — first passes, fast-forward, last pass, result
 If the code has a loop (or nested loops) that would repeat many times over
 the same data (a sort, a search, a simulation, ...), never create a scene
-per pass — that is slow and repetitive to watch. Instead:
-- Animate the first THREE iterations concretely, with real values, so the
-  viewer actually sees the pattern — one iteration alone is not enough to
-  establish it.
-- Then narrate, in a single scene, that the same pattern continues for the
-  rest of the data — don't animate every remaining pass.
-- Finish with the final result/state the loop produces (e.g. the fully
-  sorted array), so the viewer sees where it ends up.
+per pass — that is slow and repetitive to watch, and never just stop after
+a few passes either — the viewer must see the run actually finish. Cover
+the FULL run, first iteration to last, structured as:
+1. Animate the first TWO iterations concretely, narrated, with real values
+   — one iteration alone is not enough to establish the pattern.
+2. Fast-forward through the remaining MIDDLE iterations in a single scene
+   with NO per-iteration narration — this scene's narration should be one
+   short line like "this repeats for the rest of the data," while the
+   animation itself moves quickly through the remaining steps (short
+   `run_time`s, minimal `self.wait`) rather than describing each one.
+3. Animate the LAST iteration concretely, narrated, the same way as the
+   first two — don't let the run just trail off into the fast-forward.
+4. Finish with a scene showing the final result/state the loop produces
+   (e.g. the fully sorted array), so the viewer sees where it ends up.
+
+## Infinite or unbounded loops
+If a loop has no reachable termination given the code shown (e.g.
+`while True:` / `while 1:` with no `break` anywhere in its body, or a
+condition that can never become false from what's visible), do NOT animate
+it as if it completes — there is no final result to show. Instead: animate
+ONE representative iteration concretely, and state plainly in the narration
+that the loop runs indefinitely / until stopped externally — name the
+specific condition if it's apparent from the code (e.g. "until `running` is
+set to False elsewhere").
 
 ## Manim code requirements (each scene's `manim_code` value)
 - Self-contained: starts with `from manim import *` and defines exactly ONE
@@ -71,10 +121,9 @@ source, guaranteeing it is always shown correctly.
 2. **Every scene from scene 2 onward is a "step" scene**, each focused on
    ONE small piece of logic. Set `active_lines` to the exact 1-indexed line
    number(s) — from the numbered code in the user message — that this
-   scene's narration is about. Keep it a small, usually contiguous range
-   (1-4 lines): this is the ONLY code the system will show for this scene,
-   automatically, as a snippet faded in near the top of the screen — never
-   the full code again after scene 1.
+   scene's narration is about, even in jobs where no snippet will be shown
+   (see below) — it's still required, just for internal bookkeeping there.
+   Keep it a small, usually contiguous range (1-4 lines).
 
 3. **In step scenes, your own `manim_code` may add supporting visuals** —
    real diagrams, not more text:
@@ -95,19 +144,9 @@ source, guaranteeing it is always shown correctly.
      example of your own (e.g. a 4-6 element array) purely for this visual
      — don't change what the narration says the code does, just ground the
      diagram in concrete numbers so there is something to actually animate.
-   - The top ~third of the frame (roughly y > 0, up to the very top) is
-     reserved for the automatic code snippet and is completely off-limits —
-     this applies to EVERY mobject you create, with no exception for
-     titles, captions, or headings. Do not add a title/heading text at the
-     top of a step scene at all; if a diagram needs a label, place it
-     directly beside or above the diagram itself, still within the
-     allowed lower region below. Never use `.to_edge(UP)` or similar.
-   - Your own content's TOP EDGE — not just its center — must stay at or
-     below y = 0: a large/tall mobject centered exactly at ORIGIN still
-     overflows upward into the reserved zone, so size and place it with
-     that in mind (`.move_to(DOWN * 2)` is a safe default anchor).
-   - Center your content within that lower region — horizontally near
-     x = 0, vertically balanced rather than crammed against the bottom —
+__ZONE_GUIDANCE__
+   - Center your content within the frame — horizontally near x = 0,
+     vertically balanced within whatever region is available (see above) —
      and leave a visible margin from all four frame edges; nothing should
      touch or bleed off the screen border.
    - Keep it minimal, clean, and aligned: one or two short, purposeful
@@ -123,13 +162,21 @@ source, guaranteeing it is always shown correctly.
      tracked variable. When its value changes, `Transform(old, new)` (or
      `.animate.become(...)`) that same mobject in place — never `FadeIn`
      or `Write` a second value while the first is still visible on screen.
+   - Size the box to the value, not the other way around: build the value
+     Text first, then wrap it with `SurroundingRectangle(value, buff=...)`
+     so the box always fits what's inside — a fixed box size chosen
+     independently of the text is how values end up spilling past its
+     border. Show a variable's name as a small label BELOW the box via
+     `.next_to(box, DOWN, buff=...)`, not squeezed inside competing with
+     the value.
 
 ## Reference examples — model these techniques, not this exact code
-Two excerpts at the animation quality expected for a step scene's own
+Four excerpts at the animation quality expected for a step scene's own
 content. Never copy a title or a `Code(...)` call from these — that part of
 the originals is exactly what the automatic code display already replaces.
 Treat them as technique references: invent your own values/labels to fit
-the actual code being explained, and keep everything below y = 0 as above.
+the actual code being explained, and follow the zone guidance above for
+where content may go.
 
 Example — tracing a reference/pointer (e.g. explaining `b = a`):
 ```python
@@ -219,6 +266,20 @@ across iterations instead of spawning new copies; and a reassignment
 (`num ** 2`) transforms the existing value in place, so the old number is
 never left on screen next to the new one.
 
+Example — a value box that always fits its content:
+```python
+value = Text("7", font_size=32, color=WHITE)
+box = SurroundingRectangle(value, color=BLUE_E, fill_color=BLUE_E, fill_opacity=0.5, buff=0.25)
+name = Text("x", font_size=20, color=GRAY).next_to(box, DOWN, buff=0.15)
+group = VGroup(box, value, name).move_to(DOWN * 2)
+self.play(FadeIn(group))
+```
+Good because: `SurroundingRectangle` sizes itself from the value's actual
+width/height plus `buff` — the box can never be smaller than what it holds,
+regardless of digit count. The variable's name sits below as a small label
+via `.next_to(box, DOWN, ...)`, never crammed inside the box competing with
+the value.
+
 Return the scenes in narrative order with sequential integer `scene_id` starting at 1.
 
 ## Video title
@@ -227,6 +288,39 @@ Title Case, no trailing punctuation, naming what the code does (e.g.
 "Bubble Sort", "Fibonacci Calc", "Login Flow"). This is what shows up in the
 user's video list, so favor a short recognizable label over a full description.
 """
+
+_ZONE_GUIDANCE_STANDARD = """\
+   - The top ~third of the frame (roughly y > 0, up to the very top) is
+     reserved for the automatic code snippet and is completely off-limits —
+     this applies to EVERY mobject you create, with no exception for
+     titles, captions, or headings. Do not add a title/heading text at the
+     top of a step scene at all; if a diagram needs a label, place it
+     directly beside or above the diagram itself, still within the
+     allowed lower region below. Never use `.to_edge(UP)` or similar.
+   - Your own content's TOP EDGE — not just its center — must stay at or
+     below y = 0: a large/tall mobject centered exactly at ORIGIN still
+     overflows upward into the reserved zone, so size and place it with
+     that in mind (`.move_to(DOWN * 2)` is a safe default anchor).\
+"""
+
+_ZONE_GUIDANCE_LONG_FORM = """\
+   - No automatic code snippet appears in step scenes for this job — the
+     code is long/complex enough that a per-step snippet would clutter more
+     than it would help. You have the WHOLE frame for the visualization;
+     still no title/heading text anywhere (keep the frame about the
+     algorithm's state, not chrome). A centered default like
+     `.move_to(ORIGIN)` is fine now — there is no reserved zone to avoid.\
+"""
+
+
+def build_generation_system_prompt(long_form: bool = False) -> str:
+    """Assemble the full generation system prompt. `long_form` (see
+    is_long_form) swaps in different zone guidance: standard jobs reserve
+    the top ~third for the automatic step-scene snippet; long-form jobs get
+    no step snippet at all (see inject_code_display) so the model is told
+    it has the whole frame instead."""
+    zone = _ZONE_GUIDANCE_LONG_FORM if long_form else _ZONE_GUIDANCE_STANDARD
+    return _GENERATION_PROMPT_TEMPLATE.replace("__ZONE_GUIDANCE__", zone)
 
 GENERATION_SCHEMA = {
     "type": "json_schema",
@@ -489,16 +583,22 @@ def build_step_code_snippet(user_code: str, active_lines) -> str:
         """)
 
 
-def inject_code_display(manim_code: str, user_code: str, scene: dict) -> str:
+def inject_code_display(manim_code: str, user_code: str, scene: dict, long_form: bool = False) -> str:
     """Splice the appropriate deterministic snippet (intro for scene_id 1,
     step snippet otherwise) right after `def construct(self):`. If the
     marker isn't found (shouldn't happen — the lint tier requires a
-    construct method), the code is returned unchanged rather than raising."""
+    construct method), the code is returned unchanged rather than raising.
+
+    `long_form` (see is_long_form): step scenes (scene_id != 1) get NO
+    snippet at all — the intro's full-code display is still shown as
+    normal, only the repeated per-step boxes are skipped."""
     idx = manim_code.find(CONSTRUCT_MARKER)
     if idx == -1:
         return manim_code
     if scene.get("scene_id") == 1:
         body = build_intro_code_snippet(user_code, intro_hold_seconds(scene.get("narration", "")))
+    elif long_form:
+        return manim_code
     else:
         body = build_step_code_snippet(user_code, scene.get("active_lines", []))
     if not body:
