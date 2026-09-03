@@ -2,7 +2,7 @@
   "containerDefinitions": [
     {
       "name": "manim-container",
-      "image": "719246278807.dkr.ecr.us-east-1.amazonaws.com/code-animator-manim-worker:v4",
+      "image": "719246278807.dkr.ecr.us-east-1.amazonaws.com/code-animator-manim-worker:v5",
       "cpu": 0,
       "portMappings": [
         {

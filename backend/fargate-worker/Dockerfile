@@ -1,5 +1,6 @@
-# v4: extends the exact deployed worker image (v3) — same manim/texlive env —
-# adding ffmpeg (for narration muxing) and the fixed render_worker.py.
+# v5: extends the exact deployed worker image (v3) — same manim/texlive env —
+# adding ffmpeg (for narration muxing) and render_worker.py (now with a
+# last-mile dry-run + self-correction pass before the real render).
 FROM 719246278807.dkr.ecr.us-east-1.amazonaws.com/code-animator-manim-worker@sha256:da41e595183810e2cf60c82dfe5b89f2125ccdff4c4319b97e7ce33437bebbac
 
 USER root
