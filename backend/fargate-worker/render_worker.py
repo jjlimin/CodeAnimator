@@ -69,6 +69,22 @@ _DRY_RUN_DRIVER = textwrap.dedent(f"""
             print("VALIDATION: no Scene subclass defined in the file", file=_sys.stderr)
             _sys.exit(1)
 
+        _CONTAIN_EPS = 0.05
+
+        def _contains(_outer, _inner):
+            # True if _inner's bounding box sits fully inside _outer's — a
+            # label centered in its own box, or a highlight ring drawn
+            # around its target, are BOTH expected to fully contain/be
+            # contained this way. That is intentional nesting, not a
+            # collision, and must not be flagged (confirmed false-positive
+            # source: a real job failed on exactly these two patterns).
+            return (
+                _inner.get_left()[0] >= _outer.get_left()[0] - _CONTAIN_EPS
+                and _inner.get_right()[0] <= _outer.get_right()[0] + _CONTAIN_EPS
+                and _inner.get_bottom()[1] >= _outer.get_bottom()[1] - _CONTAIN_EPS
+                and _inner.get_top()[1] <= _outer.get_top()[1] + _CONTAIN_EPS
+            )
+
         _overlaps = []
         for _cls in _scene_classes:
             _scene = _cls()
@@ -77,6 +93,19 @@ _DRY_RUN_DRIVER = textwrap.dedent(f"""
             for _i in range(len(_mobs)):
                 for _j in range(_i + 1, len(_mobs)):
                     _a, _b = _mobs[_i], _mobs[_j]
+                    if _contains(_a, _b) or _contains(_b, _a):
+                        continue
+                    # A SurroundingRectangle's entire purpose is to overlap
+                    # whatever it highlights (it's derived FROM that
+                    # mobject's own position, per the "position from the
+                    # object" rule in prompts.py) — flagging that overlap
+                    # is never the actual bug. Confirmed false-positive:
+                    # highlighting one element of a larger group can stick
+                    # out past the group's own bounding box (the element
+                    # sits at an edge), so the containment check above
+                    # alone doesn't catch this case — needs its own rule.
+                    if "SurroundingRectangle" in (type(_a).__name__, type(_b).__name__):
+                        continue
                     _x_overlap = min(_a.get_right()[0], _b.get_right()[0]) - max(_a.get_left()[0], _b.get_left()[0])
                     _y_overlap = min(_a.get_top()[1], _b.get_top()[1]) - max(_a.get_bottom()[1], _b.get_bottom()[1])
                     if _x_overlap > {_OVERLAP_TOLERANCE} and _y_overlap > {_OVERLAP_TOLERANCE}:
