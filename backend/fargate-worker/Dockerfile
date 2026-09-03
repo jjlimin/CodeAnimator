@@ -1,6 +1,7 @@
-# v5: extends the exact deployed worker image (v3) — same manim/texlive env —
-# adding ffmpeg (for narration muxing) and render_worker.py (now with a
-# last-mile dry-run + self-correction pass before the real render).
+# v6: extends the exact deployed worker image (v3) — same manim/texlive env —
+# adding ffmpeg (for narration muxing) and render_worker.py (last-mile
+# dry-run + self-correction, with the overlap check's false positives on
+# intentional nesting — label-in-box, highlight-around-target — fixed).
 FROM 719246278807.dkr.ecr.us-east-1.amazonaws.com/code-animator-manim-worker@sha256:da41e595183810e2cf60c82dfe5b89f2125ccdff4c4319b97e7ce33437bebbac
 
 USER root
