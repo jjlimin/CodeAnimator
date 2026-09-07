@@ -1,3 +1,5 @@
+<img width="1280" height="507" alt="CodeAnimatorBanner" src="https://github.com/user-attachments/assets/3f2709f5-d388-4b54-9d04-98836ab716b3" />
+
 # CodeAnimator
 
 Transform Python code into animated educational videos — automatically.
