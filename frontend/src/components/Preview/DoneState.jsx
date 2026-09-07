@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
-import { Pencil, Download, Check, Share2 } from 'lucide-react';
+import { Pencil, Download, Check, Share2, Trash2 } from 'lucide-react';
 
 const DoneState = ({ videoUrl, title, code, onRename, onEdit, isShared, onShare }) => {
   const [editing, setEditing] = useState(false);
@@ -82,7 +82,11 @@ const DoneState = ({ videoUrl, title, code, onRename, onEdit, isShared, onShare 
                 isShared ? 'text-green-400 hover:text-red-400' : 'text-gray-300 hover:text-white'
               }`}
             >
-              <Share2 size={18} className="sm:w-5 sm:h-5" />
+              {isShared ? (
+                <Trash2 size={18} className="sm:w-5 sm:h-5" />
+              ) : (
+                <Share2 size={18} className="sm:w-5 sm:h-5" />
+              )}
               <span className="text-center leading-tight">{isShared ? 'Remove' : 'Add to Explore'}</span>
             </button>
             <button
